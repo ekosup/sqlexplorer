@@ -1,4 +1,5 @@
 import { SqlEngine } from './db/engine';
+import { saveDb, loadSavedDb, clearSavedDb } from './db/persist';
 import { mountFileLoader } from './ui/fileLoader';
 import { mountSchemaBrowser } from './ui/schemaBrowser';
 import { mountResultGrid } from './ui/resultGrid';
@@ -8,6 +9,9 @@ import { mountHistoryPanel } from './ui/historyPanel';
 import { mountExplainPanel } from './ui/explainPanel';
 import { mountGlossaryPanel } from './ui/glossaryPanel';
 import { mountQueryEditor } from './editor/queryEditor';
+// Tabler Icons via npm (bukan CDN) — Vite bundle woff2-nya, offline-safe (NFR-01).
+import '@tabler/icons-webfont/dist/tabler-icons.min.css';
+import { runStabilityTest, STABILITY_COUNT, type StabilityReport } from './stability/harness';
 
 const engine = new SqlEngine();
 
@@ -25,7 +29,44 @@ const queryMeta = $('query-meta');
 
 const editor = mountQueryEditor(editorSlot, { onRun: () => void runQuery() });
 
+const panelWorkspace = $('panel-workspace');
+const btnToggleEditor = $('btn-toggle-editor');
+const editorToggleIcon = $('editor-toggle-icon');
+const btnMaximizeEditor = $('btn-maximize-editor');
+const editorMaximizeIcon = $('editor-maximize-icon');
+
+const setEditorCollapsed = (collapsed: boolean): void => {
+  if (collapsed) {
+    panelWorkspace.classList.add('collapsed-editor');
+    editorToggleIcon.className = 'ti ti-chevron-down';
+    btnToggleEditor.title = 'Expand Editor';
+  } else {
+    panelWorkspace.classList.remove('collapsed-editor');
+    editorToggleIcon.className = 'ti ti-chevron-up';
+    btnToggleEditor.title = 'Minimize Editor';
+    if (document.body.classList.contains('maximized-editor')) {
+      setEditorMaximized(false);
+    }
+  }
+};
+
+const setEditorMaximized = (maximized: boolean): void => {
+  if (maximized) {
+    document.body.classList.add('maximized-editor');
+    editorMaximizeIcon.className = 'ti ti-minimize';
+    btnMaximizeEditor.title = 'Restore Editor';
+    if (panelWorkspace.classList.contains('collapsed-editor')) {
+      setEditorCollapsed(false);
+    }
+  } else {
+    document.body.classList.remove('maximized-editor');
+    editorMaximizeIcon.className = 'ti ti-maximize';
+    btnMaximizeEditor.title = 'Maximize Editor';
+  }
+};
+
 const setEditor = (sql: string): void => {
+  setEditorCollapsed(false);
   editor.setValue(sql);
   editor.focus();
 };
@@ -80,25 +121,99 @@ btnThemeToggle.addEventListener('click', () => {
   localStorage.setItem('theme', isDark ? 'dark' : 'light');
 });
 
+// Query Editor Toggle & Maximize Actions
+btnToggleEditor.addEventListener('click', () => {
+  const isCollapsed = panelWorkspace.classList.contains('collapsed-editor');
+  setEditorCollapsed(!isCollapsed);
+});
+
+btnMaximizeEditor.addEventListener('click', () => {
+  const isMaximized = document.body.classList.contains('maximized-editor');
+  setEditorMaximized(!isMaximized);
+});
+
+// Query Editor Resizing
+const resizeHandle = $('editor-resize-handle');
+let isResizing = false;
+
+resizeHandle.addEventListener('mousedown', (e) => {
+  e.preventDefault();
+  isResizing = true;
+  resizeHandle.classList.add('active');
+  document.body.style.cursor = 'row-resize';
+});
+
+document.addEventListener('mousemove', (e) => {
+  if (!isResizing) return;
+  const workspaceRect = panelWorkspace.getBoundingClientRect();
+  const titleRect = panelWorkspace.querySelector('.panel-title')!.getBoundingClientRect();
+  const relativeY = e.clientY - workspaceRect.top;
+  
+  const titleHeight = titleRect.height;
+  const minHeight = 60;
+  const maxHeight = workspaceRect.height - titleHeight - 120;
+  
+  let newHeight = relativeY - titleHeight;
+  if (newHeight < minHeight) newHeight = minHeight;
+  if (newHeight > maxHeight) newHeight = maxHeight;
+  
+  editorSlot.style.height = `${newHeight}px`;
+});
+
+document.addEventListener('mouseup', () => {
+  if (isResizing) {
+    isResizing = false;
+    resizeHandle.classList.remove('active');
+    document.body.style.cursor = '';
+  }
+});
+
+// T18: stability test harness (QA tool, disabled sampai DB dimuat).
+const btnStability = $('btn-stability') as HTMLButtonElement;
+const testOverlay = $('test-overlay');
+const testClose = $('test-close');
+const testSummary = $('test-summary');
+const testDetail = $('test-detail');
+let dbLoaded = false;
+
+// Dipakai ulang oleh upload baru maupun restore saat startup.
+// Function declaration agar hoisted; semua const/let di bawah sudah ter-init sebelum dipanggil.
+async function loadDbBytes(name: string, bytes: Uint8Array): Promise<void> {
+  dbStatus.textContent = `Memuat ${name}…`;
+  dbStatus.classList.remove('error', 'ok');
+  try {
+    await engine.loadDb(bytes);
+    dbStatus.textContent = `${name} · ${(bytes.byteLength / 1024).toFixed(1)} KB`;
+    dbStatus.classList.add('ok');
+    caseStudy.setLoadedDbName(name);
+    const schema = await engine.getSchema();
+    schemaBrowser.render(schema);
+    editor.updateSchema(schema);
+    panelSchema.classList.add('db-loaded');
+    dbLoaded = true;
+    btnStability.disabled = false;
+  } catch (err) {
+    dbStatus.textContent = `Gagal memuat: ${(err as Error).message}`;
+    dbStatus.classList.add('error');
+    throw err;
+  }
+}
+
 mountFileLoader($('file-loader'), {
   onLoad: async (file) => {
-    dbStatus.textContent = `Memuat ${file.name}…`;
-    dbStatus.classList.remove('error', 'ok');
+    const arrayBuf = await file.arrayBuffer();
     try {
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      await engine.loadDb(bytes);
-      const kb = (file.size / 1024).toFixed(1);
-      dbStatus.textContent = `${file.name} · ${kb} KB`;
-      dbStatus.classList.add('ok');
-      caseStudy.setLoadedDbName(file.name);
-      const schema = await engine.getSchema();
-      schemaBrowser.render(schema);
-      editor.updateSchema(schema);
-      panelSchema.classList.add('db-loaded');
-    } catch (err) {
-      dbStatus.textContent = `Gagal memuat: ${(err as Error).message}`;
-      dbStatus.classList.add('error');
+      await loadDbBytes(file.name, new Uint8Array(arrayBuf));
+      // Upload baru menimpa entry tersimpan → DB lama hilang, DB baru persist.
+      await saveDb(file.name, arrayBuf);
+    } catch {
+      // status error sudah di-set oleh loadDbBytes.
     }
+  },
+  onClear: async () => {
+    if (!confirm('Hapus database tersimpan? Refresh berikutnya kembali ke kondisi kosong.')) return;
+    await clearSavedDb();
+    location.reload();
   },
 });
 
@@ -108,6 +223,15 @@ let lastCols: string[] = [];
 const runQuery = async (): Promise<void> => {
   const sql = editor.getValue().trim();
   if (!sql) return;
+  
+  const wasMaximized = document.body.classList.contains('maximized-editor');
+  if (wasMaximized) {
+    setEditorMaximized(false);
+  }
+  
+  // Collapse editor to focus on results
+  setEditorCollapsed(true);
+  
   queryMeta.textContent = 'Menjalankan…';
   queryMeta.classList.remove('error');
   try {
@@ -125,6 +249,12 @@ const runQuery = async (): Promise<void> => {
     queryMeta.classList.add('error');
     resultGrid.clear();
     exportBtn.disabled = true;
+    
+    // If query failed, expand again so the user can fix the error
+    setEditorCollapsed(false);
+    if (wasMaximized) {
+      setEditorMaximized(true);
+    }
   }
 };
 
@@ -150,3 +280,54 @@ const toCsv = (cols: string[], rows: unknown[][]): string => {
   };
   return [cols.map(esc).join(','), ...rows.map((r) => r.map(esc).join(','))].join('\n');
 };
+
+const escHtml = (s: string): string =>
+  s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!);
+
+const renderStabilitySummary = (r: StabilityReport): string => {
+  const pass = r.workerAlive && r.failed === 0;
+  return `<div class="${pass ? 'ok' : 'error'}"><b>${pass ? 'LULUS' : 'GAGAL'}</b> · ${r.passed}/${r.rows.length} sesuai ekspektasi · ${r.totalMs} ms · worker ${r.workerAlive ? 'hidup' : 'MATI'}</div>`;
+};
+
+const renderStabilityDetail = (r: StabilityReport): string => `
+  <table class="result">
+    <thead><tr><th>#</th><th>Skenario</th><th>Ekspektasi</th><th>Hasil</th><th>ms</th><th>Catatan</th></tr></thead>
+    <tbody>
+      ${r.rows.map((row, i) => `<tr>
+        <td>${i + 1}</td><td>${escHtml(row.label)}</td><td>${row.expect}</td>
+        <td class="${row.match ? 'ok' : 'error'}">${row.match ? '✓ sesuai' : '✗ ' + row.got}</td>
+        <td>${row.ms}</td><td>${escHtml(row.detail ?? '')}</td>
+      </tr>`).join('')}
+    </tbody>
+  </table>`;
+
+btnStability.addEventListener('click', async () => {
+  if (!dbLoaded) return;
+  btnStability.disabled = true;
+  queryMeta.textContent = `Menjalankan uji stabilitas (${STABILITY_COUNT} query)…`;
+  queryMeta.classList.remove('error');
+  const report = await runStabilityTest(engine);
+  testSummary.innerHTML = renderStabilitySummary(report);
+  testDetail.innerHTML = renderStabilityDetail(report);
+  testOverlay.hidden = false;
+  const pass = report.workerAlive && report.failed === 0;
+  queryMeta.textContent = `Uji stabilitas: ${report.passed}/${report.rows.length} · ${report.totalMs} ms${report.workerAlive ? '' : ' · WORKER MATI'}`;
+  queryMeta.classList.toggle('error', !pass);
+  btnStability.disabled = false;
+});
+
+testClose.addEventListener('click', () => { testOverlay.hidden = true; });
+testOverlay.addEventListener('click', (e) => { if (e.target === testOverlay) testOverlay.hidden = true; });
+
+// Restore DB tersimpan saat startup — selamat dari refresh.
+// Hilang hanya via tombol "Clear DB" atau upload file baru.
+void (async () => {
+  const saved = await loadSavedDb();
+  if (!saved) return;
+  try {
+    await loadDbBytes(saved.name, new Uint8Array(saved.bytes));
+  } catch {
+    // ponytail: entry korup/tak terbaca → bersihkan agar startup berikutnya bersih.
+    await clearSavedDb();
+  }
+})();

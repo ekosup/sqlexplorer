@@ -4,12 +4,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>SQLExplorer — Belajar SQL Audit</title>
-    <!-- Google Fonts: Inter -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <!-- Tabler Icons CSS -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
     <link rel="stylesheet" href="/src/styles.css" />
   </head>
   <body>
@@ -19,6 +13,9 @@
         <h1>SQLExplorer</h1>
       </div>
       <div class="header-right">
+        <button id="btn-stability" class="ghost-btn" type="button" disabled title="Jalankan 20 query campuran, cek worker tetap hidup">
+          <i class="ti ti-test-pipe"></i> Uji Stabilitas
+        </button>
         <button id="btn-theme-toggle" class="theme-toggle-btn" title="Toggle Theme" type="button">
           <!-- Sun Icon (default for Light Mode) -->
           <i class="ti ti-sun icon-sun"></i>
@@ -52,8 +49,18 @@
         </div>
       </aside>
 
-      <section class="panel panel-workspace" aria-label="Editor dan Hasil">
-        <div class="panel-title">Query Editor</div>
+      <section id="panel-workspace" class="panel panel-workspace" aria-label="Editor dan Hasil">
+        <div class="panel-title">
+          <span>Query Editor</span>
+          <div style="display: flex; gap: 8px;">
+            <button id="btn-toggle-editor" class="panel-toggle-btn" title="Minimize/Expand Editor" type="button">
+              <i id="editor-toggle-icon" class="ti ti-chevron-up"></i>
+            </button>
+            <button id="btn-maximize-editor" class="panel-toggle-btn" title="Maximize/Restore Editor" type="button">
+              <i id="editor-maximize-icon" class="ti ti-maximize"></i>
+            </button>
+          </div>
+        </div>
         <div id="query-editor" class="panel-body editor-slot"></div>
         <div class="editor-actions">
           <div class="actions-left">
@@ -68,6 +75,7 @@
           </div>
           <span id="query-meta" class="query-meta"></span>
         </div>
+        <div id="editor-resize-handle" class="resize-handle-horizontal"></div>
         <div id="result-grid" class="panel-body result-slot" aria-live="polite"></div>
       </section>
 
@@ -106,5 +114,16 @@
     </main>
 
     <script type="module" src="/src/main.ts"></script>
+
+    <div id="test-overlay" class="test-overlay" hidden>
+      <div class="test-overlay-card">
+        <div class="test-overlay-head">
+          <b>Hasil Uji Stabilitas</b>
+          <button id="test-close" type="button" class="link-btn">Tutup</button>
+        </div>
+        <div id="test-summary" class="test-summary"></div>
+        <div id="test-detail" class="test-detail"></div>
+      </div>
+    </div>
   </body>
 </html>

@@ -1,6 +1,9 @@
 // FR-01: file picker + drag-drop untuk .sqlite/.db
 
-export type FileLoaderOpts = { onLoad: (file: File) => void | Promise<void> };
+export type FileLoaderOpts = {
+  onLoad: (file: File) => void | Promise<void>;
+  onClear: () => void | Promise<void>;
+};
 
 export const mountFileLoader = (host: HTMLElement, opts: FileLoaderOpts): void => {
   host.innerHTML = `
@@ -12,9 +15,13 @@ export const mountFileLoader = (host: HTMLElement, opts: FileLoaderOpts): void =
         <div class="drop-subtext">atau klik untuk memilih file</div>
       </div>
     </label>
+    <button class="clear-db-btn" id="fl-clear" type="button" title="Hapus database tersimpan">
+      <i class="ti ti-trash"></i>
+    </button>
   `;
   const zone = host.querySelector<HTMLLabelElement>('#fl-drop')!;
   const input = zone.querySelector<HTMLInputElement>('input')!;
+  host.querySelector<HTMLButtonElement>('#fl-clear')!.addEventListener('click', () => void opts.onClear());
 
   const handle = (file: File | undefined): void => {
     if (!file) return;
