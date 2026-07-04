@@ -513,24 +513,17 @@ html, body { height: 100%; margin: 0; background: var(--bg); overflow: hidden; t
 /* Editor & Actions */
 .editor-slot { 
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 13px;
-  padding: 12px;
-  line-height: 1.5;
+  height: 200px;
+  padding: 0;
   background: var(--editor-bg);
-  box-shadow: inset 0 2px 4px rgba(0,0,0,0.05);
 }
 
-textarea {
-  width: 100%;
-  height: 100%;
-  border: 0;
-  outline: 0;
-  resize: none;
-  font: inherit;
-  background: transparent;
-  color: var(--editor-text);
-}
-textarea::placeholder { color: var(--muted); }
+/* CodeMirror 6 */
+.cm-editor { height: 100%; }
+.cm-editor.cm-focused { outline: 0; }
+.cm-gutters { background: transparent; border-right: 1px solid var(--border); }
+.cm-content { caret-color: var(--accent); }
+.cm-placeholder { color: var(--muted); font-style: italic; }
 
 .editor-actions {
   display: flex; 

@@ -7,6 +7,7 @@ import { mountStarterQueryPanel } from './ui/starterQueryPanel';
 import { mountHistoryPanel } from './ui/historyPanel';
 import { mountExplainPanel } from './ui/explainPanel';
 import { mountGlossaryPanel } from './ui/glossaryPanel';
+import { mountQueryEditor } from './editor/queryEditor';
 
 const engine = new SqlEngine();
 
@@ -22,16 +23,11 @@ const runBtn = $('run-query') as HTMLButtonElement;
 const exportBtn = $('export-csv') as HTMLButtonElement;
 const queryMeta = $('query-meta');
 
-// ponytail: editor pakai <textarea> dulu. Ganti ke CodeMirror di T6 (FR-03 syntax highlight).
-const textarea = document.createElement('textarea');
-textarea.style.cssText = 'width:100%;height:100%;border:0;outline:0;resize:none;font:inherit;';
-textarea.placeholder = 'Tulis query SELECT di sini, contoh:\nSELECT name FROM sqlite_master WHERE type = "table";';
-textarea.setAttribute('aria-label', 'Editor SQL');
-editorSlot.appendChild(textarea);
+const editor = mountQueryEditor(editorSlot, { onRun: () => void runQuery() });
 
 const setEditor = (sql: string): void => {
-  textarea.value = sql;
-  textarea.focus();
+  editor.setValue(sql);
+  editor.focus();
 };
 
 const resultGrid = mountResultGrid($('result-grid'));
@@ -95,7 +91,9 @@ mountFileLoader($('file-loader'), {
       dbStatus.textContent = `${file.name} · ${kb} KB`;
       dbStatus.classList.add('ok');
       caseStudy.setLoadedDbName(file.name);
-      schemaBrowser.render(await engine.getSchema());
+      const schema = await engine.getSchema();
+      schemaBrowser.render(schema);
+      editor.updateSchema(schema);
       panelSchema.classList.add('db-loaded');
     } catch (err) {
       dbStatus.textContent = `Gagal memuat: ${(err as Error).message}`;
@@ -108,7 +106,7 @@ let lastRows: unknown[][] = [];
 let lastCols: string[] = [];
 
 const runQuery = async (): Promise<void> => {
-  const sql = textarea.value.trim();
+  const sql = editor.getValue().trim();
   if (!sql) return;
   queryMeta.textContent = 'Menjalankan…';
   queryMeta.classList.remove('error');
@@ -131,12 +129,6 @@ const runQuery = async (): Promise<void> => {
 };
 
 runBtn.addEventListener('click', () => void runQuery());
-textarea.addEventListener('keydown', (e) => {
-  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-    e.preventDefault();
-    void runQuery();
-  }
-});
 
 exportBtn.addEventListener('click', () => {
   if (!lastCols.length) return;
