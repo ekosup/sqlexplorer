@@ -873,3 +873,26 @@ table.result tr:hover td {
 .test-summary .error, .test-detail td.error { color: var(--danger, #b3261e); font-weight: 600; }
 .test-detail { padding: 0 14px 14px; overflow: auto; }
 .test-detail table.result { font-size: 12px; }
+
+/* Audit Log overlay */
+.audit-card { max-width: 980px; }
+#audit-detail { display: flex; flex-direction: column; gap: 12px; padding: 14px; }
+.audit-entry {
+  border: 1px solid var(--border, #d9d9de);
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: var(--panel-header, #fafafa);
+}
+.audit-meta { font-size: 11px; color: var(--muted, #888); margin-bottom: 6px; }
+.audit-sql, .audit-text, .audit-error {
+  margin: 4px 0 0; padding: 8px 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px; line-height: 1.5;
+  white-space: pre-wrap; word-break: break-word;
+  background: var(--panel, #fff);
+  border: 1px solid var(--border, #e5e5ea);
+  border-radius: 4px;
+  overflow-x: auto;
+}
+.audit-sql { color: var(--accent, #2563eb); font-weight: 500; }
+.audit-error { color: var(--danger, #b3261e); }

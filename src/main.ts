@@ -12,6 +12,8 @@ import { mountQueryEditor } from './editor/queryEditor';
 // Tabler Icons via npm (bukan CDN) — Vite bundle woff2-nya, offline-safe (NFR-01).
 import '@tabler/icons-webfont/dist/tabler-icons.min.css';
 import { runStabilityTest, STABILITY_COUNT, type StabilityReport } from './stability/harness';
+import { appendAudit, toTsv } from './db/audit';
+import { mountAuditPanel } from './ui/auditPanel';
 
 const engine = new SqlEngine();
 
@@ -84,6 +86,9 @@ mountStarterQueryPanel($('starter-query-panel'), {
 });
 mountGlossaryPanel($('glossary-panel'));
 const history = mountHistoryPanel($('history-panel'), { onPick: setEditor });
+
+const auditPanel = mountAuditPanel($('audit-overlay'));
+$('btn-audit').addEventListener('click', () => void auditPanel.open());
 
 // Collapsible sidebars logic
 const panelSchema = $('panel-schema');
@@ -175,6 +180,7 @@ const testClose = $('test-close');
 const testSummary = $('test-summary');
 const testDetail = $('test-detail');
 let dbLoaded = false;
+let currentDbName = '';
 
 // Dipakai ulang oleh upload baru maupun restore saat startup.
 // Function declaration agar hoisted; semua const/let di bawah sudah ter-init sebelum dipanggil.
@@ -186,6 +192,7 @@ async function loadDbBytes(name: string, bytes: Uint8Array): Promise<void> {
     dbStatus.textContent = `${name} · ${(bytes.byteLength / 1024).toFixed(1)} KB`;
     dbStatus.classList.add('ok');
     caseStudy.setLoadedDbName(name);
+    currentDbName = name;
     const schema = await engine.getSchema();
     schemaBrowser.render(schema);
     editor.updateSchema(schema);
@@ -234,8 +241,8 @@ const runQuery = async (): Promise<void> => {
   
   queryMeta.textContent = 'Menjalankan…';
   queryMeta.classList.remove('error');
+  const t0 = performance.now();
   try {
-    const t0 = performance.now();
     const result = await engine.execQuery(sql);
     const ms = Math.round(performance.now() - t0);
     lastCols = result.columns;
@@ -244,11 +251,21 @@ const runQuery = async (): Promise<void> => {
     queryMeta.textContent = `${result.values.length} baris · ${ms} ms`;
     exportBtn.disabled = result.values.length === 0;
     history.push(sql);
+    // Audit (best-effort; IDB error tidak boleh ganggu UX query). Hanya saat DB aktif.
+    if (dbLoaded) void appendAudit({
+      ts: Date.now(), dbName: currentDbName, sql, ms,
+      rowCount: result.values.length, text: toTsv(result.columns, result.values),
+    }).catch(() => {});
   } catch (err) {
+    const ms = Math.round(performance.now() - t0);
     queryMeta.textContent = (err as Error).message;
     queryMeta.classList.add('error');
     resultGrid.clear();
     exportBtn.disabled = true;
+    if (dbLoaded) void appendAudit({
+      ts: Date.now(), dbName: currentDbName, sql, ms, rowCount: 0, text: '',
+      error: (err as Error).message,
+    }).catch(() => {});
     
     // If query failed, expand again so the user can fix the error
     setEditorCollapsed(false);

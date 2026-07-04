@@ -16,6 +16,9 @@
         <button id="btn-stability" class="ghost-btn" type="button" disabled title="Jalankan 20 query campuran, cek worker tetap hidup">
           <i class="ti ti-test-pipe"></i> Uji Stabilitas
         </button>
+        <button id="btn-audit" class="ghost-btn" type="button" title="Lihat & export audit log hasil query">
+          <i class="ti ti-clipboard-list"></i> Histori Hasil Query
+        </button>
         <button id="btn-theme-toggle" class="theme-toggle-btn" title="Toggle Theme" type="button">
           <!-- Sun Icon (default for Light Mode) -->
           <i class="ti ti-sun icon-sun"></i>
@@ -123,6 +126,20 @@
         </div>
         <div id="test-summary" class="test-summary"></div>
         <div id="test-detail" class="test-detail"></div>
+      </div>
+    </div>
+
+    <div id="audit-overlay" class="test-overlay" hidden>
+      <div class="test-overlay-card audit-card">
+        <div class="test-overlay-head">
+          <b><i class="ti ti-clipboard-list"></i> Histori Hasil Query</b>
+          <div style="display:flex; gap:8px;">
+            <button id="audit-export" type="button" class="link-btn"><i class="ti ti-download"></i> Export .txt</button>
+            <button id="audit-clear" type="button" class="link-btn"><i class="ti ti-trash"></i> Clear</button>
+            <button id="audit-close" type="button" class="link-btn">Tutup</button>
+          </div>
+        </div>
+        <div id="audit-detail" class="test-detail"></div>
       </div>
     </div>
   </body>

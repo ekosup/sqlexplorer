@@ -1,11 +1,19 @@
-// FR-09 (session only). Max 30 item (dedup berurutan).
+// FR-09. Max 30 item (dedup berurutan). Persist di localStorage agar setiap peserta
+// mempertahankan history-nya setelah refresh. Flat text kecil → localStorage cukup.
 
 const MAX = 30;
+const KEY = 'sqlexplorer.history';
+
+const load = (): string[] => {
+  try { return JSON.parse(localStorage.getItem(KEY) || '[]') as string[]; } catch { return []; }
+};
+// ponytail: swallow quota error — history best-effort, tidak boleh break UX query.
+const save = (xs: string[]): void => { try { localStorage.setItem(KEY, JSON.stringify(xs)); } catch { /* quota */ } };
 
 export type HistoryApi = { push: (sql: string) => void };
 
 export const mountHistoryPanel = (host: HTMLElement, opts: { onPick: (sql: string) => void }): HistoryApi => {
-  const items: string[] = [];
+  const items: string[] = load();
   host.innerHTML = '<div class="subpanel-title">History</div><ul id="hist-list" class="learn-list"></ul>';
   const list = host.querySelector<HTMLUListElement>('#hist-list')!;
 
@@ -18,11 +26,14 @@ export const mountHistoryPanel = (host: HTMLElement, opts: { onPick: (sql: strin
     );
   };
 
+  render();
+
   return {
     push: (sql: string) => {
       if (items[0] === sql) return;
       items.unshift(sql);
       if (items.length > MAX) items.length = MAX;
+      save(items);
       render();
     },
   };

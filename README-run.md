@@ -31,7 +31,26 @@ node scripts/gen-sample-db.mjs
    baca **Explain**, lalu kerjakan **Individual Practice**. Atau pilih **Starter Query**.
 5. **Export CSV** mengunduh hasil (UTF-8, kompatibel Excel).
 
+## Persistensi (data yang disimpan di browser)
+- **Database** yang dimuat disimpan di IndexedDB → **selamat dari refresh / tutup tab**.
+  Hilang hanya lewat tombol **🗑 Clear DB** (di sidebar Schema) atau meng-upload file baru.
+- **History query** disimpan di `localStorage` (maks 30, dedup berurutan) → selamat dari refresh.
+- **Audit Log** (tombol **Audit Log** di header): setiap query yang dijalankan (sukses maupun error)
+  dicatat sebagai flat text (SQL + hasil TSV + nama DB aktif + waktu + ms). Berguna agar peserta
+  tetap bisa mereview hasil query meski DB sudah ditukar. Bisa di-export menjadi satu file `.txt`.
+  Tersimpan di IndexedDB, maks 200 entry (auto-trim) & 200 baris per entry.
+
+## Hosting ke GitHub Pages
+Repo sudah punya workflow (`.github/workflows/deploy.yml`) yang otomatis build & deploy
+`dist/` ke GitHub Pages setiap push ke `main`.
+
+Setup sekali:
+1. Push repo ke GitHub.
+2. **Settings → Pages → Build and deployment → Source: GitHub Actions**.
+3. Push ke `main` memicu deploy. URL: `https://<user>.github.io/sqlexplorer/`.
+
+`base: './'` (relatif) + worker via `import.meta.url` → aman dari subpath.
+
 ## Catatan
 - Mode belajar hanya menerima `SELECT` / `WITH` (read-only, FR-04).
 - Semua data diproses di browser; tidak ada yang dikirim ke server.
-- History hanya disimpan di memori sesi (tidak persist).
