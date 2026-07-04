@@ -6,40 +6,270 @@
       "icon": "ti-book-2",
       "items": [
         {
+          "id": "select",
+          "title": "SELECT",
+          "summary": "Perintah dasar untuk membaca data dari tabel.",
+          "body": "## SELECT\n\nSELECT menentukan kolom apa saja yang ingin ditampilkan dari hasil query.\n\n### Contoh\n```sql\nSELECT tanggal, cabang, nilai\nFROM transaksi;\n```\n\n> Tulis hanya kolom yang benar-benar dibutuhkan, jangan asal `SELECT *` di kode produksi."
+        },
+        {
           "id": "where",
           "title": "WHERE",
           "summary": "Menyaring baris sebelum data disajikan atau dikelompokkan.",
-          "body": "## WHERE\n\nGunakan WHERE untuk memfilter baris di tahap awal. Ini paling sering dipakai saat ingin menampilkan data tertentu saja.\n\n### Kapan dipakai?\n- Saat ingin membatasi baris hasil.\n- Sebelum GROUP BY dan HAVING.\n\n### Contoh\n```sql\nSELECT *\nFROM transaksi\nWHERE status = 'Lunas';\n```\n\n> WHERE bekerja pada baris, bukan hasil agregat."
+          "body": "## WHERE\n\nGunakan WHERE untuk memfilter baris di tahap awal. Ini paling sering dipakai saat ingin menampilkan data tertentu saja.\n\n### Kapan dipakai?\n- Saat ingin membatasi baris hasil.\n- Sebelum GROUP BY dan HAVING.\n\n### Contoh\n```sql\nSELECT *\nFROM transaksi\nWHERE status = 'Lunas';\n```\n\n> WHERE bekerja pada baris, bukan hasil agregat. Untuk menyaring hasil agregat pakai HAVING."
         },
         {
           "id": "group-by",
           "title": "GROUP BY",
           "summary": "Mengelompokkan baris berdasarkan nilai yang sama.",
-          "body": "## GROUP BY\n\nGROUP BY digunakan untuk menggabungkan baris yang punya nilai yang sama, biasanya dipakai bersama fungsi agregat seperti COUNT, SUM, atau AVG.\n\n### Contoh\n```sql\nSELECT cabang, COUNT(*) AS total_transaksi\nFROM transaksi\nGROUP BY cabang;\n```\n\n### Catatan\n- Kolom yang muncul di SELECT biasanya harus ada di GROUP BY atau menjadi bagian agregat."
+          "body": "## GROUP BY\n\nGROUP BY digunakan untuk menggabungkan baris yang punya nilai yang sama, biasanya dipakai bersama fungsi agregat seperti COUNT, SUM, atau AVG.\n\n### Contoh\n```sql\nSELECT cabang, COUNT(*) AS total_transaksi\nFROM transaksi\nGROUP BY cabang;\n```\n\n### Catatan\n- Kolom yang muncul di SELECT biasanya harus ada di GROUP BY atau menjadi bagian agregat.\n- Tanpa GROUP BY, agregat seperti SUM/AVG menyatukan seluruh tabel menjadi satu baris."
         },
         {
           "id": "having",
           "title": "HAVING",
           "summary": "Menyaring hasil agregat setelah GROUP BY.",
-          "body": "## HAVING\n\nHAVING mirip WHERE, tetapi bekerja setelah GROUP BY. Ia dipakai untuk menyaring kelompok hasil agregat.\n\n### Contoh\n```sql\nSELECT cabang, COUNT(*) AS total_transaksi\nFROM transaksi\nGROUP BY cabang\nHAVING COUNT(*) > 5;\n```"
+          "body": "## HAVING\n\nHAVING mirip WHERE, tetapi bekerja setelah GROUP BY. Ia dipakai untuk menyaring kelompok hasil agregat.\n\n### Contoh\n```sql\nSELECT cabang, COUNT(*) AS total_transaksi\nFROM transaksi\nGROUP BY cabang\nHAVING COUNT(*) > 5;\n```\n\n> Singkatnya: WHERE menyaring baris masukan, HAVING menyaring kelompok hasil."
+        },
+        {
+          "id": "order-by",
+          "title": "ORDER BY",
+          "summary": "Mengurutkan hasil query berdasarkan kolom.",
+          "body": "## ORDER BY\n\nMengurutkan hasil berdasarkan satu atau lebih kolom, naik (ASC) atau turun (DESC).\n\n### Contoh\n```sql\nSELECT cabang, nilai\nFROM transaksi\nORDER BY nilai DESC;\n```\n\n### Catatan\n- ORDER BY dijalankan paling akhir, setelah SELECT — jadi boleh pakai alias kolom hasil.\n- Boleh pakai nomor kolom: `ORDER BY 2 DESC`.\n- Pada DESC, NULL biasanya muncul paling atas; perilaku ini berbeda antar DBMS."
+        },
+        {
+          "id": "limit",
+          "title": "LIMIT / OFFSET",
+          "summary": "Membatasi jumlah baris dan melewatkan sebagian hasil.",
+          "body": "## LIMIT / OFFSET\n\nMembatasi jumlah baris hasil dan melewatkan sebagian baris. Berguna untuk melihat sampel atau membuat halaman hasil.\n\n### Contoh\n```sql\nSELECT *\nFROM transaksi\nORDER BY nilai DESC\nLIMIT 10;\n```\n\n### OFFSET\n```sql\nSELECT *\nFROM transaksi\nORDER BY id\nLIMIT 10 OFFSET 20;  -- lewati 20, ambil 10\n```\n\n> Di SQL Server pakai `TOP 10`, di PostgreSQL/Oracle modern pakai `FETCH FIRST 10 ROWS ONLY`. Selalu gabungkan LIMIT dengan ORDER BY agar hasilnya dapat diprediksi."
+        },
+        {
+          "id": "distinct",
+          "title": "DISTINCT",
+          "summary": "Menghilangkan baris duplikat dari hasil.",
+          "body": "## DISTINCT\n\nMenghilangkan baris duplikat. Dipakai bila hanya ingin tahu nilai unik dari suatu kolom.\n\n### Contoh\n```sql\nSELECT DISTINCT cabang\nFROM transaksi;\n```\n\n### Catatan\n- DISTINCT melihat seluruh kolom yang dipilih sekaligus, bukan per kolom.\n- Bila ingin sekadar menghitung jumlah nilai unik, `COUNT(DISTINCT col)` lebih ringkas daripada DISTINCT + subquery."
+        },
+        {
+          "id": "aggregate-functions",
+          "title": "Fungsi Agregat",
+          "summary": "COUNT, SUM, AVG, MIN, MAX untuk merangkum banyak baris.",
+          "body": "## Fungsi Agregat\n\nFungsi yang merangkum banyak baris menjadi satu nilai.\n\n- **COUNT(\\*)** — jumlah baris, termasuk yang NULL.\n- **COUNT(col)** — jumlah baris yang kolomnya tidak NULL.\n- **SUM(col)** — total nilai numerik.\n- **AVG(col)** — rata-rata.\n- **MIN(col) / MAX(col)** — nilai terkecil / terbesar.\n- **COUNT(DISTINCT col)** — jumlah nilai unik.\n\n### Contoh\n```sql\nSELECT cabang,\n       COUNT(*)        AS jumlah,\n       SUM(nilai)      AS total,\n       AVG(nilai)      AS rata\nFROM transaksi\nGROUP BY cabang;\n```\n\n> Hampir semua agregat (kecuali COUNT(\\*)) diam-diam melewati nilai NULL. Lihat topik Quirk: 'Agregat diam-diam melewati NULL'."
         },
         {
           "id": "join",
           "title": "JOIN",
           "summary": "Menggabungkan data dari dua tabel berdasarkan relasi tertentu.",
-          "body": "## JOIN\n\nJOIN menghubungkan baris dari dua tabel dengan basis kunci yang sama. Ini adalah inti dari analisis relasional.\n\n### Jenis yang sering dipakai\n- INNER JOIN: hanya baris yang cocok di kedua tabel.\n- LEFT JOIN: semua baris dari kiri tetap tampil, walau tidak ada pasangan di kanan.\n\n### Contoh\n```sql\nSELECT t.id, c.nama\nFROM transaksi t\nJOIN customer c ON c.id = t.customer_id;\n```"
+          "body": "## JOIN\n\nJOIN menghubungkan baris dari dua tabel dengan basis kunci yang sama. Ini adalah inti dari analisis relasional.\n\n### Jenis yang sering dipakai\n- **INNER JOIN** — hanya baris yang cocok di kedua tabel.\n- **LEFT JOIN** — semua baris dari kiri tetap tampil, walau tidak ada pasangan di kanan (pasangan kosong = NULL).\n- **RIGHT JOIN** — kebalikan LEFT JOIN.\n- **FULL JOIN** — semua baris dari kedua sisi.\n- **CROSS JOIN** — produk kartesian (setiap baris kiri × setiap baris kanan).\n- **SELF JOIN** — tabel di-JOIN dengan dirinya sendiri (biasakan pakai alias berbeda).\n\n### Contoh\n```sql\nSELECT t.id, c.nama\nFROM transaksi t\nJOIN customer c ON c.id = t.customer_id;\n```\n\n> Hati-hati JOIN menggandakan baris bila pasangannya lebih dari satu — total SUM bisa jadi salah. Lihat topik Quirk: 'JOIN menggandakan baris dan merusak total'."
+        },
+        {
+          "id": "subquery",
+          "title": "Subquery",
+          "summary": "Query di dalam query (skalar, kolom, atau tabel).",
+          "body": "## Subquery\n\nQuery di dalam query. Bisa mengembalikan satu nilai (skalar), satu kolom, atau satu tabel.\n\n### Subquery skalar (satu nilai)\n```sql\nSELECT *\nFROM transaksi\nWHERE nilai > (SELECT AVG(nilai) FROM transaksi);\n```\n\n### Subquery dengan IN\n```sql\nSELECT nama\nFROM pemasok\nWHERE id IN (SELECT pemasok_id FROM pembelian);\n```\n\n### Subquery berkorelasi\n```sql\nSELECT t.*\nFROM transaksi t\nWHERE t.nilai > (\n  SELECT AVG(nilai) FROM transaksi x WHERE x.cabang = t.cabang\n);\n```\n\n> Subquery berkorelasi dijalankan berulang per baris luar — bisa lambat. Sering bisa diganti JOIN atau EXISTS."
+        },
+        {
+          "id": "window-functions",
+          "title": "Window Function",
+          "summary": "Agregat & penomoran tanpa menyatukan baris (klausa OVER).",
+          "body": "## Window Function\n\nMenjalankan agregat atau penomoran **tanpa menyatukan baris** (tidak seperti GROUP BY). Pakai klausa `OVER (...)`.\n\n### Running total per cabang\n```sql\nSELECT tanggal, cabang, nilai,\n       SUM(nilai) OVER (PARTITION BY cabang\n                        ORDER BY tanggal) AS running_total\nFROM transaksi;\n```\n\n### Nomor urut per cabang\n```sql\nSELECT cabang, nilai,\n       ROW_NUMBER() OVER (PARTITION BY cabang ORDER BY nilai DESC) AS rn\nFROM transaksi;\n```\n\n### Fungsi yang sering dipakai\n- `ROW_NUMBER()` — nomor urut unik.\n- `RANK()` / `DENSE_RANK()` — peringkat, berbeda cara menangani seri.\n- `LAG(col)` / `LEAD(col)` — nilai baris sebelumnya / sesudahnya.\n\n> Window function dijalankan SETELAH WHERE/GROUP BY/HAVING. Anda tidak bisa menyaring hasilnya langsung dengan WHERE — bungkus dengan CTE dulu."
         },
         {
           "id": "cte",
           "title": "CTE",
           "summary": "Query sementara bernama untuk memperjelas alur logika SQL.",
-          "body": "## CTE\n\nCommon Table Expression (CTE) membuat subquery bernama yang bisa dipakai berulang dalam satu query.\n\n### Contoh\n```sql\nWITH transaksi_lunas AS (\n  SELECT *\n  FROM transaksi\n  WHERE status = 'Lunas'\n)\nSELECT *\nFROM transaksi_lunas;\n```"
+          "body": "## CTE\n\nCommon Table Expression (CTE) membuat subquery bernama yang bisa dipakai berulang dalam satu query.\n\n### Contoh\n```sql\nWITH transaksi_lunas AS (\n  SELECT *\n  FROM transaksi\n  WHERE metode_bayar <> 'Gagal'\n)\nSELECT cabang, SUM(nilai) AS total\nFROM transaksi_lunas\nGROUP BY cabang;\n```\n\n### Banyak CTE sekaligus\n```sql\nWITH a AS (SELECT ...),\n     b AS (SELECT ...)\nSELECT ... FROM a JOIN b ON ...;\n```\n\n> CTE membuat query panjang lebih mudah dibaca. Di banyak DBMS modern CTE bisa direkursif (untuk pohon/hierarki)."
         },
         {
-          "id": "select",
-          "title": "SELECT",
-          "summary": "Perintah dasar untuk membaca data dari tabel.",
-          "body": "## SELECT\n\nSELECT menentukan kolom apa saja yang ingin ditampilkan dari hasil query.\n\n### Contoh\n```sql\nSELECT tanggal, cabang, nilai\nFROM transaksi;\n```"
+          "id": "union",
+          "title": "UNION",
+          "summary": "Menggabungkan hasil dua query menjadi satu himpunan baris.",
+          "body": "## UNION\n\nMenggabungkan hasil dua query menjadi satu himpunan baris.\n\n- **UNION** — menghilangkan duplikat.\n- **UNION ALL** — mempertahankan semua baris (lebih cepat).\n\n### Contoh\n```sql\nSELECT tanggal, nilai FROM transaksi\nUNION ALL\nSELECT tanggal, nilai FROM pembelian;\n```\n\n### Syarat\nJumlah kolom dan tipe datanya harus cocok di kedua query. Nama kolom hasil mengikuti query pertama.\n\n> Pakai UNION ALL bila Anda tahu tidak ada duplikat atau ingin duplikat dipertahankan — lebih cepat karena tidak perlu membuang baris."
+        },
+        {
+          "id": "case-when",
+          "title": "CASE WHEN",
+          "summary": "Membuat kolom bersyarat, mirip if-else.",
+          "body": "## CASE WHEN\n\nMembuat kolom bersyarat, mirip if-else. Sering dipakai untuk melabeli data atau membuat pivot.\n\n### Contoh\n```sql\nSELECT cabang, nilai,\n  CASE\n    WHEN nilai > 25000000 THEN 'Besar'\n    WHEN nilai > 5000000  THEN 'Sedang'\n    ELSE 'Kecil'\n  END AS kategori\nFROM transaksi;\n```\n\n### CASE terdispilasi di dalam agregat\n```sql\nSELECT cabang,\n       SUM(CASE WHEN metode_bayar = 'Tunai' THEN nilai ELSE 0 END) AS total_tunai\nFROM transaksi\nGROUP BY cabang;\n```\n\n> CASE dievaluasi berurutan dari atas; cabang pertama yang cocok menang. Sertakan ELSE bila ingin nilai default."
+        },
+        {
+          "id": "coalesce",
+          "title": "COALESCE / NULLIF",
+          "summary": "Menangani NULL: beri default atau cegah pembagian nol.",
+          "body": "## COALESCE / NULLIF\n\n`COALESCE(a, b, c, ...)` mengembalikan nilai pertama yang tidak NULL. Sering dipakai mengganti NULL dengan nilai default.\n\n### Contoh\n```sql\nSELECT t.id, COALESCE(gl.nilai, 0) AS nilai_gl\nFROM transaksi t\nLEFT JOIN buku_besar gl ON gl.transaksi_id = t.id;\n```\n\n### NULLIF\n`NULLIF(a, b)` mengembalikan NULL bila a = b. Berguna mencegah pembagian nol:\n```sql\nSELECT nilai / NULLIF(pembagi, 0) AS rasio\nFROM laporan;\n```\nHasilnya menjadi NULL (bukan error) saat pembagi nol."
+        },
+        {
+          "id": "like",
+          "title": "LIKE",
+          "summary": "Mencocokkan pola teks dengan % dan _.",
+          "body": "## LIKE\n\nMencocokkan pola teks. Gunakan `%` untuk nol/lebih karakter apapun dan `_` untuk tepat satu karakter.\n\n### Contoh\n```sql\nSELECT * FROM karyawan WHERE nama LIKE 'Andi%';\nSELECT * FROM pemasok  WHERE kota  LIKE 'Jak_rta';\n```\n\n### Catatan\n- Di SQLite, LIKE tidak membedakan huruf besar/kecil pada huruf ASCII. Di PostgreSQL (default) LIKE CASE-sensitive.\n- `LIKE '%term'` (diawali wildcard) tidak bisa memakai indeks biasa — bisa lambat di tabel besar.\n- Untuk pola yang lebih kuat pakai `GLOB` (SQLite) atau regex bila didukung DBMS."
+        },
+        {
+          "id": "in-between",
+          "title": "IN dan BETWEEN",
+          "summary": "Operator ringkas untuk daftar nilai dan rentang.",
+          "body": "## IN dan BETWEEN\n\nOperator ringkas untuk menyaring nilai.\n\n### IN — salah satu dari daftar\n```sql\nSELECT *\nFROM transaksi\nWHERE cabang IN ('Jakarta', 'Bandung', 'Surabaya');\n```\n\n### NOT IN dengan NULL — hati-hati\n```sql\n-- BISA mengembalikan 0 baris bila subquery ada NULL!\nWHERE id NOT IN (SELECT transaksi_id FROM buku_besar);\n```\nLihat topik Quirk: 'NOT IN dengan NULL memakan hasil'.\n\n### BETWEEN — rentang inklusif\n```sql\nSELECT *\nFROM transaksi\nWHERE nilai BETWEEN 1000000 AND 5000000;\n```\n\n> BETWEEN bersifat inklusif di kedua ujung. Untuk tanggal, simpan sebagai TEXT ISO (`YYYY-MM-DD`) agar urutan alfabetis = urutan kronologis."
+        },
+        {
+          "id": "is-null",
+          "title": "IS NULL",
+          "summary": "Satu-satunya cara benar mengecek nilai NULL.",
+          "body": "## IS NULL\n\nSatu-satunya cara yang benar untuk mengecek nilai NULL.\n\n### Contoh\n```sql\nSELECT t.*\nFROM transaksi t\nLEFT JOIN buku_besar gl ON gl.transaksi_id = t.id\nWHERE gl.id IS NULL;  -- transaksi tanpa jurnal\n```\n\n> `= NULL` maupun `<> NULL` **tidak pernah menghasilkan TRUE** — keduanya menghasilkan UNKNOWN (diperlakukan tidak terpenuhi). Selalu pakai `IS NULL` / `IS NOT NULL`. Lihat topik Quirk: 'NULL tidak sama dengan dirinya sendiri'."
+        },
+        {
+          "id": "cast",
+          "title": "CAST",
+          "summary": "Mengubah tipe data sebuah nilai secara eksplisit.",
+          "body": "## CAST\n\nMengubah tipe data sebuah nilai secara eksplisit.\n\n### Contoh\n```sql\nSELECT CAST('2024-03-15' AS DATE);\nSELECT CAST(nilai AS INTEGER) FROM transaksi;\nSELECT CAST('42' AS REAL);\n```\n\n> Konversi implisit kadang terjadi otomatis (mis. teks angka ke numerik) tetapi perilakunya berbeda antar DBMS. CAST membuat maksud jelas dan aman, terutama saat menggabungkan teks dan angka."
+        },
+        {
+          "id": "date-functions",
+          "title": "Fungsi Tanggal (SQLite)",
+          "summary": "strftime, substr, date untuk mengolah tanggal bertipe TEXT.",
+          "body": "## Fungsi Tanggal (SQLite)\n\nKarena tanggal pada dataset ini disimpan sebagai TEXT ISO, gunakan `strftime`, `date`, atau `substr` untuk mengolahnya.\n\n### Kelompokkan per bulan\n```sql\nSELECT substr(tanggal, 1, 7) AS bulan,\n       SUM(nilai) AS total\nFROM transaksi\nGROUP BY substr(tanggal, 1, 7)\nORDER BY bulan;\n```\n\n### strftime\n```sql\nSELECT strftime('%Y-%m', tanggal) AS bulan, COUNT(*)\nFROM transaksi\nGROUP BY bulan;\n```\n\n> Format tanggal non-ISO (`15/03/2024`) **tidak** terurut dengan benar sebagai teks. Selalu simpan tanggal dalam `YYYY-MM-DD`."
+        },
+        {
+          "id": "kunci-relasi",
+          "title": "Kunci Primer & Asing",
+          "summary": "PRIMARY KEY dan FOREIGN KEY menjaga integritas relasi.",
+          "body": "## Kunci Primer & Asing\n\n- **PRIMARY KEY** — kolom (atau gabungan kolom) yang unik mengidentifikasi setiap baris. Tidak boleh NULL.\n- **FOREIGN KEY** — kolom yang merujuk PRIMARY KEY tabel lain, membuat relasi antar tabel.\n\n### Contoh pada skema ini\n- `transaksi.id` adalah kunci primer transaksi.\n- `buku_besar.transaksi_id` merujuk `transaksi.id` — itulah relasi yang dipakai saat JOIN rekonsiliasi.\n- `pembelian.pemasok_id` merujuk `pemasok.id`.\n\n> FOREIGN KEY yang baik seharusnya punya INDEX supaya JOIN cepat. Tanpa indeks, JOIN di tabel besar menjadi lambat."
+        },
+        {
+          "id": "index",
+          "title": "INDEX",
+          "summary": "Struktur yang mempercepat pencarian & JOIN.",
+          "body": "## INDEX\n\nStruktur tambahan yang membuat pencarian, filter, dan JOIN pada kolom tertentu jauh lebih cepat — dengan biaya ruang dan sedikit kelambatan saat menulis.\n\n### Contoh\n```sql\nCREATE INDEX idx_trx_tanggal ON transaksi(tanggal);\nCREATE INDEX idx_gl_trx       ON buku_besar(transaksi_id);\n```\n\n### Kapan membantu?\n- Kolom yang sering difilter di WHERE.\n- Kolom yang dipakai sebagai kunci JOIN.\n- Kolom yang sering diurutkan (ORDER BY).\n\n> Tidak perlu membuat indeks untuk semua kolom — setiap indeks memperlambat INSERT/UPDATE/DELETE. Indeks di kolom dengan sedikit nilai unik (mis. jenis kelamin) biasanya kurang berguna."
+        },
+        {
+          "id": "view",
+          "title": "VIEW",
+          "summary": "Tabel virtual berisi hasil query tersimpan.",
+          "body": "## VIEW\n\nTabel virtual berisi hasil query tersimpan. Berguna menyederhanakan query berulang atau membatasi kolom yang terlihat pengguna.\n\n### Contoh\n```sql\nCREATE VIEW trx_aktif AS\n  SELECT * FROM transaksi WHERE metode_bayar <> 'Gagal';\n\nSELECT * FROM trx_aktif;\n```\n\n> VIEW (biasa) tidak menyimpan data sendiri — ia menjalankan ulang query dasarnya setiap kali dipanggil. Materialized view (bila didukung) menyimpan hasilnya dan harus di-refresh."
+        }
+      ]
+    },
+    {
+      "id": "quirk",
+      "title": "Quirk & Jebakan",
+      "icon": "ti-alert-triangle",
+      "items": [
+        {
+          "id": "null-equality",
+          "title": "NULL tidak sama dengan dirinya sendiri",
+          "summary": "= NULL dan <> NULL tidak pernah benar; pakai IS NULL.",
+          "body": "## NULL itu UNKNOWN, bukan nilai\n\nNULL berarti 'tidak diketahui', bukan 'nol' atau 'kosong'. Logika tiga-nilai (TRUE/FALSE/UNKNOWN) inilah yang bikin banyak jebakan.\n\n### Yang tidak bekerja\n```sql\nSELECT * FROM buku_besar WHERE transaksi_id = NULL;   -- selalu kosong!\nSELECT * FROM buku_besar WHERE transaksi_id <> NULL;  -- juga kosong!\n```\nKedua perbandingan di atas menghasilkan UNKNOWN, yang diperlakukan sebagai 'tidak terpenuhi'.\n\n### Yang benar\n```sql\nSELECT * FROM buku_besar WHERE transaksi_id IS NULL;\nSELECT * FROM buku_besar WHERE transaksi_id IS NOT NULL;\n```\n\n> Ini sebabnya pola anti-JOIN pakai `LEFT JOIN ... WHERE b.id IS NULL` — itu satu-satunya cara andal mendeteksi ketiadaan pasangan."
+        },
+        {
+          "id": "not-in-null",
+          "title": "NOT IN dengan NULL memakan hasil",
+          "summary": "Bila subquery NOT IN mengandung NULL, hasil bisa jadi nol baris.",
+          "body": "## Jebakan klasik NOT IN\n\n`x NOT IN (a, b, c)` setara dengan `x<>a AND x<>b AND x<>c`. Bila salah satu elemen NULL, maka ada satu `x<>NULL` = UNKNOWN, sehingga seluruh kondisi jatuh ke UNKNOWN untuk semua baris.\n\n### Berbahaya\n```sql\nSELECT *\nFROM transaksi\nWHERE id NOT IN (\n  SELECT transaksi_id FROM buku_besar   -- ada NULL di sini?\n);\n-- Bisa mengembalikan 0 baris meski data ada!\n```\n\n### Lebih aman\n```sql\nSELECT t.*\nFROM transaksi t\nWHERE t.id NOT IN (\n  SELECT transaksi_id FROM buku_besar WHERE transaksi_id IS NOT NULL\n);\n```\n\n### Paling andal: anti-JOIN\n```sql\nSELECT t.*\nFROM transaksi t\nLEFT JOIN buku_besar gl ON gl.transaksi_id = t.id\nWHERE gl.id IS NULL;\n```\n\n> Aturan praktis: bila pakai NOT IN dengan subquery, selalu saring NULL di dalam subquery itu."
+        },
+        {
+          "id": "count-variants",
+          "title": "COUNT(*), COUNT(col), COUNT(DISTINCT col) berbeda",
+          "summary": "Tiga bentuk COUNT menghitung tiga hal yang berbeda.",
+          "body": "## Tiga COUNT yang berbeda\n\n- `COUNT(*)` — menghitung **semua** baris, termasuk yang berisi NULL.\n- `COUNT(col)` — menghitung baris yang `col`-nya **tidak NULL**.\n- `COUNT(DISTINCT col)` — menghitung **nilai unik** yang tidak NULL.\n\n### Contoh perbedaan\nMisal `buku_besar` punya baris dengan `transaksi_id` NULL (jurnal tanpa link transaksi):\n```sql\nSELECT\n  COUNT(*)                       AS semua_baris,\n  COUNT(transaksi_id)            AS ada_link,\n  COUNT(DISTINCT transaksi_id)   AS transaksi_unik\nFROM buku_besar;\n```\nHasilnya bisa sangat berbeda!\n\n> Saat menulis `COUNT(nama_kolom)`, tanyakan dulu: apakah saya ingin menghitung baris, atau menghitung nilai tidak-NULL? Bila ragu, `COUNT(*)` biasanya yang dimaksud."
+        },
+        {
+          "id": "aggregates-skip-null",
+          "title": "Agregat diam-diam melewati NULL",
+          "summary": "SUM, AVG, MIN, MAX mengabaikan NULL tanpa peringatan.",
+          "body": "## Agregat mengabaikan NULL\n\nHampir semua fungsi agregat (SUM, AVG, MIN, MAX) secara otomatis melewati NULL. Hanya `COUNT(*)` yang tidak.\n\n### Konsekuensi tidak intuitif\n- `AVG(nilai)` menghitung rata-rata **hanya atas baris yang tidak NULL** — pembilang dan penyebut sama-sama berkurang.\n- `SUM` yang semua barisnya NULL menghasilkan **NULL**, bukan 0.\n\n### Contoh\n```sql\nSELECT SUM(gl.nilai)         AS total_gl,    -- NULL bila semua NULL\n       COALESCE(SUM(gl.nilai), 0) AS total_aman,\n       AVG(gl.nilai)         AS rata_gl       -- abaikan baris NULL\nFROM transaksi t\nLEFT JOIN buku_besar gl ON gl.transaksi_id = t.id;\n```\n\n> Bila ingin NULL diperlakukan sebagai 0, bungkus kolom dengan `COALESCE(col, 0)` sebelum diagregat, atau gunakan `COUNT(col)` bila perlu tahu berapa baris yang ikut."
+        },
+        {
+          "id": "join-fanout",
+          "title": "JOIN menggandakan baris dan merusak total",
+          "summary": "Satu baris kiri dengan banyak pasangan kanan bikin SUM jadi berlipat.",
+          "body": "## Jebakan paling mahal di analisis keuangan\n\nBila satu baris tabel kiri punya **lebih dari satu** pasangan di tabel kanan, JOIN akan menduplikasi baris kiri. Akibatnya `SUM` atas kolom kiri menjadi **berlipat**.\n\n### Skenario berbahaya\n```sql\n-- Salah: total transaksi bisa over-count bila 1 transaksi punya banyak jurnal\nSELECT cabang, SUM(t.nilai) AS total\nFROM transaksi t\nLEFT JOIN buku_besar gl ON gl.transaksi_id = t.id\nGROUP BY cabang;\n```\nJika satu transaksi punya 3 baris di buku_besar, `t.nilai` terhitung 3×.\n\n### Perbaikan: agregat dulu sebelum JOIN\n```sql\nWITH gl_per_trx AS (\n  SELECT transaksi_id, SUM(nilai) AS total_gl\n  FROM buku_besar\n  GROUP BY transaksi_id\n)\nSELECT t.cabang, SUM(t.nilai) AS total_trx\nFROM transaksi t\nLEFT JOIN gl_per_trx g ON g.transaksi_id = t.id\nGROUP BY t.cabang;\n```\n\n> Aturan emas: sebelum menjumlahkan kolom dari salah satu sisi JOIN, pastikan pasangan JOIN-nya maksimal satu-ke-satu per baris sisi itu — agregatkan terlebih dahulu di CTE/subquery."
+        },
+        {
+          "id": "float-money",
+          "title": "Bilangan real tidak presisi untuk uang",
+          "summary": "REAL/float menimbulkan pembulatan aneh; pakai INTEGER (sen) atau DECIMAL.",
+          "body": "## Uang jangan disimpan di REAL\n\nTipe REAL (floating-point) menyimpan nilai biner pendekatan, sehingga bisa muncul selisih kecil:\n```\n0.1 + 0.2  ->  0.30000000000000004\n```\nSelisih sepersekian sen ini bisa membatalkan rekonsiliasi.\n\n### Solusi\n- Simpan dalam **satuan terkecil** (rupiah penuh, atau sen) sebagai **INTEGER**.\n- Atau pakai **DECIMAL/NUMERIC** bila DBMS mendukung (mis. `DECIMAL(15,2)`).\n- Bila terpaksa REAL, selalu bulatkan hasil: `ROUND(SUM(nilai), 2)`.\n\n### Bandingkan uang dengan toleransi\n```sql\n-- Hindari persamaan langsung pada REAL\nSELECT * FROM rekonsiliasi\nWHERE ABS(nilai_trx - nilai_gl) > 0.01;  -- selisih > 1 sen\n```\n\n> Pada dataset ini `nilai` bertipe REAL. Saat membandingkan total, selalu pakai `ROUND(...)` dan toleransi kecil untuk menghindari laporan selisih 'hantu'."
+        },
+        {
+          "id": "alias-in-where",
+          "title": "Alias SELECT tidak bisa dipakai di WHERE",
+          "summary": "WHERE berjalan sebelum SELECT; alias baru lahir setelahnya.",
+          "body": "## Urutan eksekusi menentukan apa yang terlihat\n\nLogis, SQL berjalan: FROM → WHERE → GROUP BY → HAVING → SELECT → ORDER BY. Karena WHERE berjalan **sebelum** SELECT, alias yang Anda buat di SELECT belum ada saat WHERE dievaluasi.\n\n### Salah\n```sql\nSELECT nilai * 1.1 AS nilai_baru\nFROM transaksi\nWHERE nilai_baru > 1000000;   -- ERROR: kolom tidak dikenal\n```\n\n### Benar (ulang ekspresi)\n```sql\nSELECT nilai * 1.1 AS nilai_baru\nFROM transaksi\nWHERE nilai * 1.1 > 1000000;\n```\n\n### Atau pakai CTE\n```sql\nWITH t AS (\n  SELECT nilai * 1.1 AS nilai_baru FROM transaksi\n)\nSELECT * FROM t WHERE nilai_baru > 1000000;\n```\n\n> Pengecualian: **ORDER BY** boleh memakai alias SELECT karena ia berjalan paling akhir."
+        },
+        {
+          "id": "group-by-column",
+          "title": "Kolom non-agregat di SELECT harus di GROUP BY",
+          "summary": "Kolom biasa yang tidak dikelompokkan membuat hasil tak terduga.",
+          "body": "## Aturan satu nilai per kelompok\n\nSetiap kolom non-agregat di SELECT harus juga muncul di GROUP BY (atau dikelompokkan). Bila tidak, DBMS harus menebak baris mana yang dipakai — bisa error (mode `ONLY_FULL_GROUP_BY` di MySQL) atau mengembalikan nilai acak (SQLite/MySQL lama).\n\n### Salah / ambigu\n```sql\nSELECT cabang, tanggal, SUM(nilai)   -- 'tanggal' ambigu!\nFROM transaksi\nGROUP BY cabang;\n```\nCabang punya banyak tanggal; nilai `tanggal` yang muncul tidak terdefinisi.\n\n### Benar\n```sql\nSELECT cabang, MAX(tanggal) AS terakhir, SUM(nilai)\nFROM transaksi\nGROUP BY cabang;\n```\n\n> Bila Anda ingin detail per tanggal juga, masukkan `tanggal` ke GROUP BY atau jangan tampilkan. Jangan biarkan kolom 'menggantung'."
+        },
+        {
+          "id": "ambiguous-column",
+          "title": "Kolom ambigu saat JOIN",
+          "summary": "Kolom dengan nama sama di dua tabel harus diberi alias tabel.",
+          "body": "## Nama kolom yang sama di dua tabel\n\nBila dua tabel yang di-JOIN memiliki kolom dengan nama yang sama (mis. `id`, `tanggal`, `nilai`), menyebut nama kolom saja menjadi ambigu dan memicu error.\n\n### Error\n```sql\nSELECT id, tanggal           -- id tabel mana? tanggal mana?\nFROM transaksi t\nJOIN buku_besar gl ON gl.transaksi_id = t.id;\n```\n\n### Benar: kualifikasi dengan alias tabel\n```sql\nSELECT t.id AS trx_id,\n       t.tanggal AS trx_tanggal,\n       gl.id AS gl_id,\n       gl.tanggal AS gl_tanggal\nFROM transaksi t\nJOIN buku_besar gl ON gl.transaksi_id = t.id;\n```\n\n> Biasakan selalu menambahkan alias tabel (`t.nilai`, `gl.nilai`) saat menulis JOIN — kode menjadi jelas dan terhindar dari error ambigu."
+        },
+        {
+          "id": "date-text-sort",
+          "title": "Tanggal sebagai teks harus format ISO",
+          "summary": "Format non-ISO terurut salah secara alfabetis.",
+          "body": "## Urutan alfabet ≠ urutan waktu\n\nBila tanggal disimpan sebagai TEXT, urutan pengurutan/pengelompokan mengikuti urutan alfabetis. Hanya format ISO `YYYY-MM-DD` yang urutan alfabetnya sama dengan urutan kronologis.\n\n### Terurut salah\n```\n'01/12/2024'  <  '02/01/2024'   ? (alfabet iya, kronologis TIDAK)\n'1/3/2024'    <  '10/3/2023'    ? (panjang digit berbeda)\n```\n\n### Terurut benar (ISO)\n```\n'2024-01-12' < '2024-02-01'   ✓\n```\n\n### Memperbaiki saat query\n```sql\n-- Asumsi format 'DD/MM/YYYY' di kolom tgl_lama\nSELECT date(\n  substr(tgl_lama,7,4) || '-' ||\n  substr(tgl_lama,4,2) || '-' ||\n  substr(tgl_lama,1,2)\n) AS tgl_iso\nFROM sumber;\n```\n\n> Pada dataset ini semua tanggal sudah ISO. Bila mengimpor data sendiri, normalisasi ke `YYYY-MM-DD` sebelum disimpan."
+        },
+        {
+          "id": "empty-vs-null",
+          "title": "String kosong bukan NULL",
+          "summary": "'' dan NULL dua hal berbeda; agregat & filter memperlakukan mereka beda.",
+          "body": "## '' ≠ NULL\n\nString kosong `''` adalah nilai (panjang nol), sedangkan NULL adalah ketiadaan nilai. Banyak yang menganggap mereka sama — mereka tidak.\n\n### Perbedaan perilaku\n```sql\nWHERE cabang = ''        -- cocok dengan string kosong SAJA\nWHERE cabang IS NULL     -- cocok dengan NULL SAJA\n\nCOUNT(cabang)            -- menghitung baris '', tapi TIDAK NULL\n```\n\n### Mencari 'kosong' dalam arti luas\n```sql\nSELECT * FROM transaksi\nWHERE cabang IS NULL OR TRIM(cabang) = '';\n```\n\n> Saat membersihkan data, putuskan kebijakan: apakah nilai hilang disimpan sebagai NULL atau ''. Konsisten. Bercampur dua-duanya adalah sumber bug diam-diam."
+        },
+        {
+          "id": "like-perf-case",
+          "title": "LIKE wildcard & sensitif huruf",
+          "summary": "Awalan % membuat LIKE lambat; sensitivitas huruf beda per DBMS.",
+          "body": "## Dua jebakan LIKE\n\n**1. Awalan wildcard menggagalkan indeks.**\n```sql\nWHERE nama LIKE '%andi%'   -- tidak bisa pakai indeks, full scan\nWHERE nama LIKE 'andi%'    -- bisa pakai indeks (cepat)\n```\nDi tabel besar, selalu usahakan pola diawali teks tetap.\n\n**2. Sensitivitas huruf tidak konsisten.**\n- SQLite: `LIKE` case-insensitive untuk ASCII.\n- PostgreSQL default: `LIKE` case-sensitive; pakai `ILIKE` untuk case-insensitive.\n- MySQL: tergantung *collation*.\n\n### Solusi konsisten: lower() kedua sisi\n```sql\nWHERE LOWER(nama) LIKE 'andi%';\n```\n\n> Ingat `LOWER(col) LIKE '...'` juga mematikan indeks biasa — pertimbangkan indeks ekspresi bila sering dipakai pada tabel besar."
+        },
+        {
+          "id": "select-star",
+          "title": "SELECT * menyembunyikan struktur & boros",
+          "summary": "Memuat semua kolom lambat, rapuh terhadap perubahan skema.",
+          "body": "## Kenapa hindari SELECT *\n\n- **Boros**: memuat kolom yang tidak dipakai (terutama teks/blob besar).\n- **Rapuh**: bila skema berubah (kolom ditambah), hasil query/JSON/JOIN ikut berubah tanpa peringatan.\n- **Ambigu**: di JOIN, dua kolom bernama sama (`id`, `nilai`) bisa membingungkan konsumen hasil.\n\n### Lebih baik eksplisit\n```sql\nSELECT t.id, t.tanggal, t.cabang, t.nilai\nFROM transaksi t;\n```\n\n### Kapan SELECT * masih wajar\n- Eksplorasi cepat di IDE (seperti aplikasi ini).\n- `SELECT COUNT(*)` (ini tidak benar-benar memuat kolom).\n- `EXISTS (SELECT 1 ...)` — lebih baik pakai `1` daripada `*`.\n\n> Di kode produksi atau laporan, sebutkan kolom yang dibutuhkan. SELECT * adalah utang teknis."
+        }
+      ]
+    },
+    {
+      "id": "patterns",
+      "title": "Pola Query Umum",
+      "icon": "ti-template",
+      "items": [
+        {
+          "id": "anti-join",
+          "title": "Mencari baris tanpa pasangan (anti-JOIN)",
+          "summary": "LEFT JOIN ... IS NULL untuk menemukan 'yang hilang'.",
+          "body": "## Anti-JOIN\n\nPola untuk mencari baris di satu tabel yang **tidak punya** pasangan di tabel lain. Inti dari rekonsiliasi audit.\n\n### Transaksi yang belum dijurnal\n```sql\nSELECT t.id, t.tanggal, t.cabang, t.nilai\nFROM transaksi t\nLEFT JOIN buku_besar gl ON gl.transaksi_id = t.id\nWHERE gl.id IS NULL\nORDER BY t.id;\n```\n\n### Varian: pemasok tanpa pembelian\n```sql\nSELECT p.*\nFROM pemasok p\nLEFT JOIN pembelian b ON b.pemasok_id = p.id\nWHERE b.id IS NULL;\n```\n\n> Kuncinya: LEFT JOIN menjaga semua baris kiri, lalu `WHERE kanan.id IS NULL` menyaring yang tidak ketemu pasangan. Jauh lebih andal daripada `NOT IN` bila ada NULL (lihat Quirk: NOT IN dengan NULL)."
+        },
+        {
+          "id": "running-total",
+          "title": "Total berjalan (running total)",
+          "summary": "SUM() OVER untuk akumulasi tanpa menyatukan baris.",
+          "body": "## Running total dengan window function\n\nMenghitung akumulasi nilai sampai baris saat ini — berguna untuk saldo berjalan atau target kumulatif.\n\n### Saldo berjalan per cabang\n```sql\nSELECT tanggal, cabang, nilai,\n       SUM(nilai) OVER (\n         PARTITION BY cabang\n         ORDER BY tanggal\n         ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW\n       ) AS saldo_berjalan\nFROM transaksi\nORDER BY cabang, tanggal;\n```\n\n### Tanpa PARTITION (total keseluruhan)\n```sql\nSELECT tanggal, nilai,\n       SUM(nilai) OVER (ORDER BY tanggal) AS total_kumulatif\nFROM transaksi;\n```\n\n> `ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW` adalah bentuk eksplisit dari 'dari awal sampai baris ini'. Berguna saat ada baris dengan tanggal sama agar urutannya jelas."
+        },
+        {
+          "id": "rank-top-n",
+          "title": "Peringkat & N teratas",
+          "summary": "ROW_NUMBER / RANK untuk mencari besar tertinggi per kelompok.",
+          "body": "## Ranking dengan window function\n\n### Transaksi terbesar per cabang (1 per cabang)\n```sql\nWITH ranked AS (\n  SELECT t.*,\n         ROW_NUMBER() OVER (PARTITION BY cabang ORDER BY nilai DESC) AS rn\n  FROM transaksi t\n)\nSELECT * FROM ranked WHERE rn = 1;\n```\n\n### Top 3 transaksi terbesar keseluruhan\n```sql\nSELECT *\nFROM transaksi\nORDER BY nilai DESC\nLIMIT 3;\n```\n\n### Perbedaan ROW_NUMBER vs RANK\nBila ada nilai yang seri:\n- `ROW_NUMBER()` memberi nomor unik (tidak ada yang sama).\n- `RANK()` memberi peringkat sama lalu melompat (1,1,3).\n- `DENSE_RANK()` memberi peringkat sama tanpa lompat (1,1,2).\n\n> Pakai CTE bungkus lalu `WHERE rn <= N` — karena window function tidak bisa langsung difilter di WHERE (lihat Quirk: alias & urutan eksekusi)."
+        },
+        {
+          "id": "date-grouping",
+          "title": "Mengelompokkan per bulan / minggu",
+          "summary": "Potong tanggal ISO untuk agregasi periode.",
+          "body": "## Agregasi per periode\n\nKarena tanggal ISO `YYYY-MM-DD`, potong string untuk mengelompokkan.\n\n### Per bulan\n```sql\nSELECT substr(tanggal, 1, 7) AS bulan,\n       COUNT(*) AS jumlah,\n       SUM(nilai) AS total\nFROM transaksi\nGROUP BY substr(tanggal, 1, 7)\nORDER BY bulan;\n```\n\n### Per tahun\n```sql\nSELECT substr(tanggal, 1, 4) AS tahun, SUM(nilai)\nFROM transaksi\nGROUP BY tahun;\n```\n\n### Per minggu (strftime)\n```sql\nSELECT strftime('%Y-W%W', tanggal) AS minggu, COUNT(*)\nFROM transaksi\nGROUP BY minggu;\n```\n\n> `substr(tanggal,1,7)` = ambil 7 karakter dari posisi 1 → `YYYY-MM`. Cepat dan tidak butuh parsing tanggal penuh."
+        },
+        {
+          "id": "case-pivot",
+          "title": "Pivot dengan CASE",
+          "summary": "Ubah baris menjadi kolom menggunakan agregat + CASE.",
+          "body": "## Pivot manual dengan CASE\n\nMembuat kolom hasil per kategori, dengan agregat membungkus CASE.\n\n### Total per metode bayar, dalam kolom\n```sql\nSELECT cabang,\n  SUM(CASE WHEN metode_bayar = 'Tunai'    THEN nilai ELSE 0 END) AS total_tunai,\n  SUM(CASE WHEN metode_bayar = 'Transfer' THEN nilai ELSE 0 END) AS total_transfer,\n  SUM(CASE WHEN metode_bayar = 'Kartu'    THEN nilai ELSE 0 END) AS total_kartu,\n  SUM(nilai) AS total_semua\nFROM transaksi\nGROUP BY cabang;\n```\n\n### Hitung jumlah transaksi per kategori ukuran\n```sql\nSELECT cabang,\n  SUM(CASE WHEN nilai > 25000000 THEN 1 ELSE 0 END) AS trx_besar,\n  SUM(CASE WHEN nilai <= 25000000 THEN 1 ELSE 0 END) AS trx_kecil\nFROM transaksi\nGROUP BY cabang;\n```\n\n> Pola `SUM(CASE WHEN ... THEN 1 ELSE 0 END)` = hitung baris yang memenuhi syarat. Berguna saat nilai pivot tidak diketahui di muka."
+        },
+        {
+          "id": "dedupe",
+          "title": "Menemukan & menangani duplikat",
+          "summary": "GROUP BY + HAVING untuk deteksi; CTE + ROW_NUMBER untuk pilih satu.",
+          "body": "## Deteksi duplikat\n\n### Kombinasi yang muncul lebih dari sekali\n```sql\nSELECT tanggal, cabang, nilai, COUNT(*) AS jumlah\nFROM transaksi\nGROUP BY tanggal, cabang, nilai\nHAVING COUNT(*) > 1\nORDER BY jumlah DESC, nilai DESC;\n```\n\n### Total baris duplikat\n```sql\nSELECT COUNT(*) - COUNT(DISTINCT (tanggal || '|' || cabang || '|' || nilai)) AS baris_duplikat\nFROM transaksi;\n```\n\n## Menyimpan hanya satu dari setiap duplikat\n```sql\nWITH ranked AS (\n  SELECT t.*,\n         ROW_NUMBER() OVER (\n           PARTITION BY tanggal, cabang, nilai\n           ORDER BY id        -- tetapkan aturan: id terkecil = versi 'resmi'\n         ) AS rn\n  FROM transaksi t\n)\nSELECT * FROM ranked WHERE rn = 1;\n```\n\n> `ROW_NUMBER() ... = 1` adalah cara aman memilih tepat satu baris per kelompok duplikat. Aturan `ORDER BY id` menentukan mana yang dipilih — jadikan eksplisit agar reproducible."
         }
       ]
     },
@@ -52,19 +282,55 @@
           "id": "execution-order",
           "title": "Urutan eksekusi SQL",
           "summary": "Memahami urutan logis dari FROM, WHERE, GROUP BY, HAVING, SELECT, ORDER BY.",
-          "body": "## Urutan eksekusi SQL\n\nSecara logika, SQL biasanya dibaca dan dijalankan dalam urutan berikut:\n\n1. FROM\n2. WHERE\n3. GROUP BY\n4. HAVING\n5. SELECT\n6. ORDER BY\n\n### Kenapa penting?\nKarena pemahaman urutan ini membantu saat menulis query yang benar, terutama saat ada filter, agregasi, dan sorting.\n\n### Contoh ringkas\n```sql\nSELECT cabang, COUNT(*) AS total\nFROM transaksi\nWHERE status = 'Lunas'\nGROUP BY cabang\nHAVING COUNT(*) > 1\nORDER BY total DESC;\n```"
+          "body": "## Urutan eksekusi SQL\n\nSecara logika, SQL biasanya dibaca dan dijalankan dalam urutan berikut:\n\n1. FROM (termasuk JOIN)\n2. WHERE\n3. GROUP BY\n4. HAVING\n5. SELECT (termasuk window function)\n6. ORDER BY\n7. LIMIT\n\n### Kenapa penting?\nKarena urutan ini menentukan apa yang bisa dirujuk: alias SELECT belum ada di WHERE, hasil agregat belum ada saat WHERE, dst.\n\n### Contoh ringkas\n```sql\nSELECT cabang, COUNT(*) AS total\nFROM transaksi\nWHERE status = 'Lunas'\nGROUP BY cabang\nHAVING COUNT(*) > 1\nORDER BY total DESC\nLIMIT 5;\n```\n\n> Catatan: ini adalah **urutan logis** untuk memahami query. Optimizer DBMS boleh menjalankannya dengan urutan fisik berbeda asalkan hasilnya sama."
         },
         {
           "id": "empty-results",
           "title": "Kenapa hasil query kosong?",
           "summary": "Biasanya karena filter terlalu ketat atau data tidak cocok.",
-          "body": "## Kenapa hasil query kosong?\n\nHasil kosong bisa muncul karena beberapa alasan: \n\n- Filter WHERE terlalu ketat.\n- Tidak ada data yang cocok dengan JOIN.\n- Nama kolom atau tabel salah.\n\n### Langkah cepat\n1. Cek data di tabel sumber.\n2. Kurangi filter secara bertahap.\n3. Pastikan nama kolom sesuai schema."
+          "body": "## Kenapa hasil query kosong?\n\nHasil kosong bisa muncul karena beberapa alasan:\n\n- Filter WHERE terlalu ketat atau salah ketik.\n- Tidak ada data yang cocok dengan JOIN (coba ganti ke LEFT JOIN untuk lihat).\n- Nama kolom atau tabel salah (periksa schema).\n- Perbandingan dengan NULL (`= NULL`) — pakai `IS NULL`.\n- `NOT IN` dengan subquery yang mengandung NULL.\n- Tipe data tidak cocok (mis. bandingkan angka dengan teks).\n\n### Langkah cepat\n1. Hapus filter satu per satu sampai ada hasil — temukan penyebabnya.\n2. Jalankan `SELECT COUNT(*) FROM tabel` dulu untuk pastikan data ada.\n3. Cetak beberapa baris tanpa filter untuk lihat nilai asli.\n4. Bila pakai JOIN, ganti ke LEFT JOIN sementara untuk lihat pasangan yang hilang."
         },
         {
           "id": "alias",
           "title": "Apa itu alias?",
           "summary": "Alias memberi nama singkat atau lebih jelas untuk kolom atau tabel.",
-          "body": "## Alias\n\nAlias membantu membuat hasil query lebih mudah dibaca.\n\n### Contoh\n```sql\nSELECT COUNT(*) AS total_transaksi\nFROM transaksi;\n```\n\nDi sini `AS total_transaksi` memberi nama untuk kolom hasil."
+          "body": "## Alias\n\nAlias membantu membuat hasil query lebih mudah dibaca, dan memberi nama singkat untuk tabel di JOIN.\n\n### Alias kolom\n```sql\nSELECT COUNT(*) AS total_transaksi,\n       SUM(nilai) AS total_nilai\nFROM transaksi;\n```\n\n### Alias tabel\n```sql\nSELECT t.id, gl.nilai\nFROM transaksi   AS t\nJOIN buku_besar  AS gl ON gl.transaksi_id = t.id;\n```\n\n> `AS` boleh dihilangkan: `SELECT nilai n` sama dengan `SELECT nilai AS n`. Tetapi menulis `AS` membuat kode lebih jelas. Ingat: alias kolom baru bisa dipakai di ORDER BY, **tidak** di WHERE (lihat Quirk)."
+        },
+        {
+          "id": "where-vs-having",
+          "title": "Kapan WHERE, kapan HAVING?",
+          "summary": "WHERE untuk baris masukan, HAVING untuk hasil agregat.",
+          "body": "## WHERE vs HAVING\n\nKeduanya menyaring, tapi pada tahap berbeda.\n\n- **WHERE** menyaring **baris** sebelum agregasi (sebelum GROUP BY).\n- **HAVING** menyaring **kelompok** setelah agregasi (setelah GROUP BY).\n\n### Contoh perbedaan\n```sql\nSELECT cabang, SUM(nilai) AS total\nFROM transaksi\nWHERE metode_bayar <> 'Gagal'   -- buang baris gagal DULU\nGROUP BY cabang\nHAVING SUM(nilai) > 1000000;    -- lalu buang cabang yang totalnya kecil\n```\n\n### Aturan praktis\n- Menyaring berdasarkan kolom asli? → **WHERE**.\n- Menyaring berdasarkan hasil SUM/COUNT/AVG? → **HAVING**.\n\n> Menyaring di WHERE lebih efisien: baris dibuang sebelum dikelompokkan, jadi GROUP BY bekerja pada lebih sedikit data."
+        },
+        {
+          "id": "which-join",
+          "title": "JOIN mana yang harus saya pakai?",
+          "summary": "Pilih INNER, LEFT, atau SELF sesuai pertanyaan.",
+          "body": "## Memilih JOIN\n\n### INNER JOIN (default)\nBila hanya ingin baris yang **punya pasangan** di kedua tabel.\n```\ntransaksi INNER JOIN customer  -> hanya transaksi dengan customer yang ada\n```\n\n### LEFT JOIN\nBila ingin **semua** baris kiri, termasuk yang tanpa pasangan. Pasangan kosong jadi NULL.\n```\ntransaksi LEFT JOIN buku_besar -> semua transaksi, walau belum dijurnal\n```\nIni pola standar untuk **rekonsiliasi / mencari yang hilang**.\n\n### SELF JOIN\nBila tabel dirujuk ke dirinya sendiri (mis. hierarki karyawan-manajer).\n```sql\nSELECT k.nama AS bawahan, m.nama AS atasan\nFROM karyawan k\nLEFT JOIN karyawan m ON m.id = k.manajer_id;\n```\n\n### CROSS JOIN\nBila ingin **semua kombinasi** (jarang dipakai, waspadai ledakan baris).\n\n> Mulai dari INNER JOIN. Bila hasil terasa kehilangan baris yang seharusnya ada, ganti ke LEFT JOIN untuk lihat apa yang hilang."
+        },
+        {
+          "id": "delete-truncate-drop",
+          "title": "Bedanya DELETE, TRUNCATE, DROP?",
+          "summary": "Tiga cara menghapus dengan konsekuensi sangat berbeda.",
+          "body": "## Tiga cara menghapus\n\n### DELETE — hapus baris tertentu\n```sql\nDELETE FROM transaksi WHERE status = 'Gagal';\n```\n- Bisa pakai WHERE (selektif).\n- Bisa di-rollback dalam transaksi.\n- Lambat untuk hapus massal; memicu trigger per baris.\n\n### TRUNCATE — kosongkan seluruh tabel\n```sql\nTRUNCATE TABLE transaksi;\n```\n- Tidak ada WHERE (semua baris hilang).\n- Sangat cepat; reset penomoran auto-increment.\n- Perilaku rollback bervariasi antar DBMS.\n\n### DROP — hapus struktur tabel\n```sql\nDROP TABLE transaksi;\n```\n- Tabel beserta struktur, indeks, dan datanya hilang.\n- Tidak bisa di-rollback di banyak DBMS.\n\n> Aplikasi ini bersifat hanya-baca (read-only) untuk pengguna, jadi operasi DELETE/TRUNCATE/DROP tidak relevan di sini. Tetapi wajib dipahami agar tidak salah ketik saat bekerja di database sungguhan. Selalu pakai WHERE pada DELETE, dan pertimbangkan `BEGIN; ... ROLLBACK;` saat ragu."
+        },
+        {
+          "id": "transaction-acid",
+          "title": "Apa itu transaksi & ACID?",
+          "summary": "Sekelompok perubahan yang berlaku semua-atau-tidak-sama-sekali.",
+          "body": "## Transaksi\n\nTransaksi mengelompokkan beberapa perintah sehingga semuanya berhasil (COMMIT) atau semuanya dibatalkan (ROLLBACK). Mencegah data setengah-jadi saat ada error di tengah.\n\n### Contoh\n```sql\nBEGIN;\n  UPDATE akun SET saldo = saldo - 100 WHERE id = 1;\n  UPDATE akun SET saldo = saldo + 100 WHERE id = 2;\nCOMMIT;   -- atau ROLLBACK; bila ada masalah\n```\n\n## ACID\n- **Atomicity** — semua atau tidak sama sekali.\n- **Consistency** — transaksi membawa DB dari satu kondisi valid ke kondisi valid lain.\n- **Isolation** — transaksi bersamaan seolah-olah berurutan.\n- **Durability** — setelah COMMIT, perubahan bertahan walau mati lampu.\n\n> Untuk analisis/query baca-saja seperti di aplikasi ini, ACID tidak terasa. Tetapi wajib dipahami saat menulis aplikasi yang mengubah data keuangan."
+        },
+        {
+          "id": "debug-slow-query",
+          "title": "Queryku lambat, dari mana mulai?",
+          "summary": "Urutan cek: SELECT *, filter, JOIN, indeks, EXPLAIN.",
+          "body": "## Memocepat query lambat\n\n### Cek urutan ini\n1. **Ganti `SELECT *` jadi kolom yang dibutuhkan saja.**\n2. **Filter sedini mungkin di WHERE** (bukan HAVING) agar GROUP BY bekerja pada lebih sedikit baris.\n3. **Pastikan kolom JOIN & WHERE punya indeks.** Kolom foreign key wajib diindeks.\n4. **Hindari fungsi pada kolom di WHERE** (`WHERE YEAR(tanggal)=2024` mematikan indeks). Pakai rentang: `WHERE tanggal >= '2024-01-01'`.\n5. **Subquery berkorelasi** sering lambat — coba ganti JOIN atau EXISTS.\n6. **JOIN menggandakan baris?** Agregatkan salah satu sisi di CTE dulu.\n\n### Lihat rencana eksekusi\n```sql\nEXPLAIN QUERY PLAN\nSELECT cabang, SUM(nilai) FROM transaksi GROUP BY cabang;\n```\nKalau muncul `SCAN TABLE` (bukan `SEARCH ... USING INDEX`), berarti full scan — kandidat untuk indeks.\n\n> Optimasi tanpa ukur hanya tebakan. Ukur dulu dengan data ukuran realistis, baru tambah indeks/perubahan yang terbukti mempercepat."
+        },
+        {
+          "id": "read-error-messages",
+          "title": "Membaca pesan error SQL",
+          "summary": "Pesan umum dan artinya.",
+          "body": "## Pesan error umum dan artinya\n\n### no such column: X\nKolom `X` tidak ada. Periksa ejaan, atau bila di JOIN, kualifikasi dengan alias tabel (`t.X`). Sering juga tanda koma hilang sehingga kata berikutnya dianggap nama kolom.\n\n### no such table: X\nNama tabel salah, atau tabel memang belum ada di database yang dipilih.\n\n### ambiguous column name: X\nKolom `X` ada di lebih dari satu tabel di JOIN — sebut dengan alias (`t.X`).\n\n### near \"...\": syntax error\nKesalahan tata bahasa tepat sebelum teks tersebut. Sering: koma hilang/lebih, kurung tidak tutup, kata kunci salah ketik.\n\n### misuse of aggregate: ...\nMencampur kolom biasa dengan agregat tanpa GROUP BY (lihat Quirk: kolom non-agregat).\n\n### no such function: X\nFungsi tidak ada di DBMS ini (mis. `YEAR()` tidak ada di SQLite — pakai `strftime`).\n\n> Baca pesan dari atas ke bawah, perbaiki error pertama dulu. Banyak error berikutnya sering hanya akibat dari yang pertama."
         }
       ]
     }
