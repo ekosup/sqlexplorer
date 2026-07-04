@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SQLExplorer — Belajar SQL Audit</title>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Tabler Icons CSS -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/dist/tabler-icons.min.css" />
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="brand">
+        <i class="ti ti-terminal-2 brand-icon"></i>
+        <h1>SQLExplorer</h1>
+      </div>
+      <div class="header-right">
+        <button id="btn-theme-toggle" class="theme-toggle-btn" title="Toggle Theme" type="button">
+          <!-- Sun Icon (default for Light Mode) -->
+          <i class="ti ti-sun icon-sun"></i>
+          <!-- Moon Icon (hidden by default) -->
+          <i class="ti ti-moon icon-moon"></i>
+        </button>
+        <div id="db-status" class="db-status">
+          <i class="ti ti-database"></i>
+          <span>Belum ada database dimuat</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="app-shell">
+      <aside class="panel panel-schema" id="panel-schema" aria-label="Schema">
+        <div class="panel-title">
+          <span>Schema</span>
+          <button id="btn-collapse-schema" class="panel-toggle-btn" title="Collapse Schema">
+            <i class="ti ti-chevron-left"></i>
+          </button>
+        </div>
+        <div class="panel-collapsed-view" id="btn-expand-schema" title="Expand Schema">
+          <button class="panel-toggle-btn">
+            <i class="ti ti-chevron-right"></i>
+          </button>
+          <span class="vertical-text">SCHEMA</span>
+        </div>
+        <div class="panel-content-wrapper">
+          <div id="file-loader" class="file-loader-wrapper"></div>
+          <div id="schema-browser" class="panel-body"></div>
+        </div>
+      </aside>
+
+      <section class="panel panel-workspace" aria-label="Editor dan Hasil">
+        <div class="panel-title">Query Editor</div>
+        <div id="query-editor" class="panel-body editor-slot"></div>
+        <div class="editor-actions">
+          <div class="actions-left">
+            <button id="run-query" type="button" class="btn-primary">
+              <i class="ti ti-player-play"></i>
+              Run <kbd>⌘/Ctrl+Enter</kbd>
+            </button>
+            <button id="export-csv" type="button" class="btn-secondary" disabled>
+              <i class="ti ti-download"></i>
+              Export CSV
+            </button>
+          </div>
+          <span id="query-meta" class="query-meta"></span>
+        </div>
+        <div id="result-grid" class="panel-body result-slot" aria-live="polite"></div>
+      </section>
+
+      <aside class="panel panel-learning" id="panel-learning" aria-label="Pembelajaran">
+        <div class="panel-title">
+          <span>Pembelajaran</span>
+          <button id="btn-collapse-learning" class="panel-toggle-btn" title="Collapse Pembelajaran">
+            <i class="ti ti-chevron-right"></i>
+          </button>
+        </div>
+        <div class="panel-collapsed-view" id="btn-expand-learning" title="Expand Pembelajaran">
+          <button class="panel-toggle-btn">
+            <i class="ti ti-chevron-left"></i>
+          </button>
+          <span class="vertical-text">PEMBELAJARAN</span>
+        </div>
+        <div class="learning-scroll">
+          <section class="learn-section">
+            <div class="subpanel-title">Explain</div>
+            <div id="explain-panel" class="panel-body learn-body"></div>
+          </section>
+          <section class="learn-section">
+            <div id="case-study-panel" class="panel-body learn-body"></div>
+          </section>
+          <section class="learn-section">
+            <div id="starter-query-panel" class="panel-body learn-body"></div>
+          </section>
+          <section class="learn-section">
+            <div id="glossary-panel" class="panel-body learn-body"></div>
+          </section>
+          <section class="learn-section">
+            <div id="history-panel" class="panel-body learn-body"></div>
+          </section>
+        </div>
+      </aside>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

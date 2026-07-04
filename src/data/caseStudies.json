@@ -1,0 +1,81 @@
+[
+  {
+    "id": "cs-rekonsiliasi-01",
+    "title": "Rekonsiliasi Penjualan vs Buku Besar",
+    "description": "Bandingkan transaksi penjualan dengan jurnal buku besar untuk memastikan semua pendapatan tercatat.",
+    "scenario": [
+      {
+        "id": "scn-1",
+        "title": "Cari transaksi yang belum dijurnal",
+        "db": "sample-audit.sqlite",
+        "query": "SELECT t.id, t.tanggal, t.cabang, t.nilai AS nilai_trx, gl.nilai AS nilai_gl FROM transaksi t LEFT JOIN buku_besar gl ON gl.transaksi_id = t.id WHERE gl.id IS NULL ORDER BY t.id;",
+        "explanation": "LEFT JOIN mencocokkan setiap transaksi dengan buku besar. Baris yang nilai_gl-nya NULL berarti transaksi itu belum tercatat di jurnal.",
+        "practice": "Ubah query agar hanya menampilkan transaksi cabang Jakarta yang belum dijurnal.",
+        "explain": {
+          "mencari_apa": "Transaksi penjualan yang belum punya pasangan di buku besar.",
+          "cara_baca": "Setiap baris adalah satu transaksi yang 'hilang' dari GL. Periksa tanggal, cabang, dan nominal.",
+          "red_flag": "Banyak transaksi belum terposting, terutama yang nilainya besar, mengindikasikan penghindaran pencatatan atau kesalahan sistem."
+        }
+      },
+      {
+        "id": "scn-2",
+        "title": "Hitung selisih total per cabang",
+        "db": "sample-audit.sqlite",
+        "query": "SELECT t.cabang, ROUND(SUM(t.nilai), 0) AS total_trx, ROUND(SUM(gl.nilai), 0) AS total_gl, ROUND(SUM(t.nilai) - SUM(gl.nilai), 0) AS selisih FROM transaksi t LEFT JOIN buku_besar gl ON gl.transaksi_id = t.id GROUP BY t.cabang ORDER BY selisih DESC;",
+        "explanation": "Karena ada transaksi tanpa GL, total_trx bisa lebih besar dari total_gl. Selisih per cabang memperlihatkan area yang perlu ditelusuri.",
+        "practice": "Ubah GROUP BY menjadi per bulan (pakai strftime) untuk melihat kapan selisih terjadi.",
+        "explain": {
+          "mencari_apa": "Selisih total nilai transaksi vs buku besar, dikelompokkan per cabang.",
+          "cara_baca": "Kolom 'selisih' positif berarti ada transaksi belum terjurnal. Cabang dengan selisih besar = prioritas audit.",
+          "red_flag": "Selisih konsisten di satu cabang bisa menandakan masalah proses atau indikasi fraud."
+        }
+      }
+    ],
+    "query": "SELECT t.id, t.tanggal, t.cabang, t.nilai AS nilai_trx, gl.nilai AS nilai_gl FROM transaksi t LEFT JOIN buku_besar gl ON gl.transaksi_id = t.id WHERE gl.id IS NULL ORDER BY t.id;",
+    "explanation": "Query baseline rekonsiliasi: memakai LEFT JOIN agar semua transaksi tetap muncul meski tidak ada pasangan GL. Baris tanpa pasangan = temuan audit."
+  },
+  {
+    "id": "cs-duplikasi-01",
+    "title": "Deteksi Transaksi Duplikat",
+    "description": "Temukan transaksi yang dicatat lebih dari sekali dengan atribut identik.",
+    "scenario": [
+      {
+        "id": "scn-1",
+        "title": "Duplikasi tanggal-cabang-nilai",
+        "db": "sample-audit.sqlite",
+        "query": "SELECT tanggal, cabang, nilai, COUNT(*) AS jumlah FROM transaksi GROUP BY tanggal, cabang, nilai HAVING COUNT(*) > 1 ORDER BY jumlah DESC, nilai DESC;",
+        "explanation": "GROUP BY mengelompokkan baris yang sama persis. HAVING COUNT(*) > 1 menyaring hanya kelompok yang berulang.",
+        "practice": "Tambahkan kolom metode_bayar ke GROUP BY. Apakah jumlah duplikasi berubah?",
+        "explain": {
+          "mencari_apa": "Kombinasi transaksi yang identik dan muncul berulang.",
+          "cara_baca": "Kolom 'jumlah' menunjukkan berapa kali kombinasi itu tercatat. > 1 = calon duplikasi.",
+          "red_flag": "Duplikasi pada nominal besar atau transaksi manual berisiko pembayaran ganda."
+        }
+      }
+    ],
+    "query": "SELECT tanggal, cabang, nilai, COUNT(*) AS jumlah FROM transaksi GROUP BY tanggal, cabang, nilai HAVING COUNT(*) > 1 ORDER BY jumlah DESC, nilai DESC;",
+    "explanation": "Teknik klasik deteksi duplikasi: kelompokkan atribut kunci lalu saring yang hitungannya lebih dari satu."
+  },
+  {
+    "id": "cs-anomali-01",
+    "title": "Deteksi Nilai Tidak Wajar",
+    "description": "Cari transaksi dengan nilai jauh di atas normal yang perlu bukti pendukung.",
+    "scenario": [
+      {
+        "id": "scn-1",
+        "title": "Transaksi di atas 25 juta",
+        "db": "sample-audit.sqlite",
+        "query": "SELECT id, tanggal, cabang, metode_bayar, nilai FROM transaksi WHERE nilai > 25000000 ORDER BY nilai DESC;",
+        "explanation": "Ambang 25 juta dipilih karena jauh di atas rentang transaksi normal. Hasilnya adalah kandidat transaksi luar biasa.",
+        "practice": "Ganti ambang menjadi 40 juta. Bandingkan jumlah temuan, lalu pikirkan ambang yang tepat untuk bisnis ini.",
+        "explain": {
+          "mencari_apa": "Transaksi yang nilainya melampaui ambang normal (25.000.000).",
+          "cara_baca": "Urut dari terbesar. Untuk setiap baris, tanyakan: apakah transaksi sebesar ini wajar?",
+          "red_flag": "Nominal ekstrem pada cabang kecil, metode tunai, atau di luar jam kerja = perlu verifikasi dokumen."
+        }
+      }
+    ],
+    "query": "SELECT id, tanggal, cabang, metode_bayar, nilai FROM transaksi WHERE nilai > 25000000 ORDER BY nilai DESC;",
+    "explanation": "Analisis outlier: ambang batas membantu menyaring transaksi yang menyimpang dari pola normal."
+  }
+]

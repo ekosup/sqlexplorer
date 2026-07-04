@@ -1,0 +1,16 @@
+[
+  { "istilah": "Audit", "bidang": "audit", "definisi": "Pemeriksaan sistematis atas catatan keuangan untuk memastikan kewajaran dan kepatuhan." },
+  { "istilah": "Rekonsiliasi", "bidang": "audit", "definisi": "Proses mencocokkan dua sumber data (mis. transaksi vs buku besar) untuk mencari selisih." },
+  { "istilah": "Red flag", "bidang": "audit", "definisi": "Tanda atau pola yang mencurigakan dan perlu ditelusuri lebih lanjut." },
+  { "istilah": "Sampling", "bidang": "audit", "definisi": "Mengambil sebagian item dari populasi untuk diperiksa, mewakili keseluruhan." },
+  { "istilah": "Duplikasi", "bidang": "audit", "definisi": "Pencatatan transaksi yang sama lebih dari sekali, berisiko pembayaran/pendapatan ganda." },
+  { "istilah": "Buku besar", "bidang": "audit", "definisi": "Kumpulan akun tempat seluruh jurnal transaksi dirangkum (General Ledger)." },
+  { "istilah": "Outlier", "bidang": "audit", "definisi": "Nilai yang jauh menyimpang dari pola normal populasi data." },
+  { "istilah": "SELECT", "bidang": "sql", "definisi": "Perintah membaca data dari tabel; dasar dari hampir semua analisis query." },
+  { "istilah": "JOIN", "bidang": "sql", "definisi": "Menggabungkan baris dari dua tabel berdasarkan kolom yang berhubungan." },
+  { "istilah": "LEFT JOIN", "bidang": "sql", "definisi": "Jenis JOIN yang menampilkan semua baris tabel kiri meski tidak ada pasangan di tabel kanan." },
+  { "istilah": "GROUP BY", "bidang": "sql", "definisi": "Mengelompokkan baris dengan nilai sama, biasanya dipakai bersama fungsi agregat." },
+  { "istilah": "HAVING", "bidang": "sql", "definisi": "Menyaring kelompok hasil GROUP BY, mirip WHERE tapi untuk hasil agregat." },
+  { "istilah": "WHERE", "bidang": "sql", "definisi": "Menyaring baris sebelum dikelompokkan atau ditampilkan." },
+  { "istilah": "CTE", "bidang": "sql", "definisi": "Common Table Expression: hasil query sementara bernama, dibuat dengan WITH." }
+]

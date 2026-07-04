@@ -1,0 +1,106 @@
+[
+  {
+    "id": "sq-list-tables",
+    "title": "Daftar semua tabel",
+    "konsep_audit": "Orientasi dataset",
+    "tujuan_belajar": "Mengenali struktur database sebelum mulai audit.",
+    "apa_yang_dicek": "Nama tabel yang tersedia.",
+    "query": "SELECT name AS tabel FROM sqlite_master WHERE type = 'table' ORDER BY name;",
+    "explain": {
+      "mencari_apa": "Melihat tabel apa saja yang ada di database, langkah pertama sebelum analisis.",
+      "cara_baca": "Satu baris = satu tabel. Catat tabel yang relevan untuk topik audit kamu.",
+      "red_flag": "Belum ada — ini langkah pengenalan. Tabel mencurigakan: nama tidak jelas atau duplikat."
+    }
+  },
+  {
+    "id": "sq-rowcount",
+    "title": "Hitung baris per tabel",
+    "konsep_audit": "Sanity check volume data",
+    "tujuan_belajar": "Memastikan skala data wajar sebelum diolah.",
+    "apa_yang_dicek": "Jumlah baris pada tabel utama.",
+    "query": "SELECT COUNT(*) AS jumlah FROM transaksi;",
+    "explain": {
+      "mencari_apa": "Menghitung berapa banyak transaksi (baris) di tabel.",
+      "cara_baca": "Satu angka = total baris. Cocokkan dengan ekspektasi periodik (mis. per bulan).",
+      "red_flag": "Jumlah mendadak naik/turun drastis dibanding periode sebelumnya."
+    }
+  },
+  {
+    "id": "sq-rekonsiliasi",
+    "title": "Rekonsiliasi transaksi vs buku besar",
+    "konsep_audit": "Rekonsiliasi",
+    "tujuan_belajar": "Mendeteksi transaksi yang tidak tercatat di buku besar.",
+    "apa_yang_dicek": "Kelengkapan posting transaksi ke jurnal GL.",
+    "query": "SELECT t.id, t.tanggal, t.cabang, t.nilai AS nilai_trx, gl.nilai AS nilai_gl FROM transaksi t LEFT JOIN buku_besar gl ON gl.transaksi_id = t.id WHERE gl.id IS NULL ORDER BY t.id;",
+    "explain": {
+      "mencari_apa": "Transaksi penjualan yang TIDAK punya pasangan di buku besar (GL).",
+      "cara_baca": "Setiap baris = satu transaksi yang belum dijurnal. Lihat tanggal, cabang, dan nominalnya.",
+      "red_flag": "Transaksi besar atau banyak yang tidak terposting = risiko penghilangan pendapatan / kesalahan pencatatan."
+    }
+  },
+  {
+    "id": "sq-duplikasi",
+    "title": "Deteksi transaksi duplikat",
+    "konsep_audit": "Duplikasi",
+    "tujuan_belajar": "Menemukan transaksi dengan atribut identik yang dicatat lebih dari sekali.",
+    "apa_yang_dicek": "Duplikasi pada tanggal + cabang + nominal.",
+    "query": "SELECT tanggal, cabang, nilai, COUNT(*) AS jumlah FROM transaksi GROUP BY tanggal, cabang, nilai HAVING COUNT(*) > 1 ORDER BY jumlah DESC;",
+    "explain": {
+      "mencari_apa": "Kombinasi tanggal-cabang-nilai yang muncul lebih dari sekali.",
+      "cara_baca": "Kolom 'jumlah' menunjukkan berapa kali kombinasi itu berulang. > 1 = perlu ditelusuri.",
+      "red_flag": "Duplikasi pada nominal besar / transaksi manual bisa mengindikasikan pencatatan ganda atau penipuan."
+    }
+  },
+  {
+    "id": "sq-anomali",
+    "title": "Deteksi nilai tidak wajar (outlier)",
+    "konsep_audit": "Anomali",
+    "tujuan_belajar": "Mencari transaksi yang jauh di atas rentang normal.",
+    "apa_yang_dicek": "Transaksi dengan nilai ekstrem (> 25 juta).",
+    "query": "SELECT id, tanggal, cabang, metode_bayar, nilai FROM transaksi WHERE nilai > 25000000 ORDER BY nilai DESC;",
+    "explain": {
+      "mencari_apa": "Transaksi dengan nominal di atas ambang normal (25.000.000).",
+      "cara_baca": "Urut dari yang terbesar. Periksa cabang, metode bayar, dan apakah transaksi sebesar itu wajar untuk bisnis.",
+      "red_flag": "Nilai ekstrem pada cabang kecil, metode tunai, atau di luar jam kerja = perlu bukti pendukung."
+    }
+  },
+  {
+    "id": "sq-tren-bulanan",
+    "title": "Tren transaksi per bulan",
+    "konsep_audit": "Tren periodik",
+    "tujuan_belajar": "Melihat pola jumlah dan total nilai transaksi sepanjang tahun.",
+    "apa_yang_dicek": "Fluktuasi volume transaksi bulanan.",
+    "query": "SELECT strftime('%Y-%m', tanggal) AS bulan, COUNT(*) AS jml_trx, ROUND(SUM(nilai), 0) AS total_nilai FROM transaksi GROUP BY bulan ORDER BY bulan;",
+    "explain": {
+      "mencari_apa": "Ringkasan jumlah transaksi dan total nominal per bulan.",
+      "cara_baca": "Satu baris per bulan. Bandingkan 'jml_trx' dan 'total_nilai' antar bulan untuk lihat lonjakan/penurunan.",
+      "red_flag": "Bulan dengan lonjakan tidak wajar (mis. di luar musim ramai) patut diperiksa lebih dalam."
+    }
+  },
+  {
+    "id": "sq-sampling",
+    "title": "Sampling audit acak",
+    "konsep_audit": "Sampling",
+    "tujuan_belajar": "Mengambil sampel acak untuk pengujian detail.",
+    "apa_yang_dicek": "Representasi acak dari populasi transaksi.",
+    "query": "SELECT id, tanggal, cabang, metode_bayar, nilai FROM transaksi ORDER BY RANDOM() LIMIT 20;",
+    "explain": {
+      "mencari_apa": "20 transaksi acak untuk diperiksa satu per satu.",
+      "cara_baca": "Hasil berubah tiap kali dijalankan (karena RANDOM()). Periksa kelengkapan dokumen pendukung tiap baris.",
+      "red_flag": "Sampel tanpa dokumen pendukung atau dengan nilai tidak konsisten = temuan audit."
+    }
+  },
+  {
+    "id": "sq-top-pemasok",
+    "title": "Total pembelian per pemasok",
+    "konsep_audit": "Konsentrasi pemasok",
+    "tujuan_belajar": "Mengidentifikasi pemasok dengan pengeluaran terbesar.",
+    "apa_yang_dicek": "Konsentrasi pengeluaran ke pemasok tertentu.",
+    "query": "SELECT p.id, p.nama AS pemasok, COUNT(*) AS jml_beli, ROUND(SUM(b.nilai), 0) AS total_beli FROM pembelian b JOIN pemasok p ON p.id = b.pemasok_id GROUP BY p.id ORDER BY total_beli DESC;",
+    "explain": {
+      "mencari_apa": "Total nilai dan jumlah pembelian per pemasok.",
+      "cara_baca": "Urut dari pengeluaran terbesar. Lihat apakah satu pemasok mendominasi.",
+      "red_flag": "Konsentrasi berlebih ke satu pemasok tanpa proses tender = risiko kolusi atau ketergantungan."
+    }
+  }
+]
