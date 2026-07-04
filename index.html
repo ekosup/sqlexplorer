@@ -13,11 +13,14 @@
         <h1>SQLExplorer</h1>
       </div>
       <div class="header-right">
-        <button id="btn-stability" class="ghost-btn" type="button" disabled title="Jalankan 20 query campuran, cek worker tetap hidup">
+        <!-- <button id="btn-stability" class="ghost-btn" type="button" disabled title="Jalankan 20 query campuran, cek worker tetap hidup">
           <i class="ti ti-test-pipe"></i> Uji Stabilitas
-        </button>
+        </button> -->
         <button id="btn-audit" class="ghost-btn" type="button" title="Lihat & export audit log hasil query">
           <i class="ti ti-clipboard-list"></i> Riwayat
+        </button>
+        <button id="btn-reference" class="ghost-btn" type="button" title="Buka glosarium & FAQ SQL">
+          <i class="ti ti-book-2"></i> Referensi
         </button>
         <button id="btn-theme-toggle" class="theme-toggle-btn" title="Toggle Theme" type="button">
           <!-- Sun Icon (default for Light Mode) -->
@@ -82,18 +85,18 @@
         <div id="result-grid" class="panel-body result-slot" aria-live="polite"></div>
       </section>
 
-      <aside class="panel panel-learning" id="panel-learning" aria-label="Pembelajaran">
+      <aside class="panel panel-learning" id="panel-learning" aria-label="Learning">
         <div class="panel-title">
-          <span>Pembelajaran</span>
-          <button id="btn-collapse-learning" class="panel-toggle-btn" title="Collapse Pembelajaran">
+          <span>Learning</span>
+          <button id="btn-collapse-learning" class="panel-toggle-btn" title="Collapse Learning">
             <i class="ti ti-chevron-right"></i>
           </button>
         </div>
-        <div class="panel-collapsed-view" id="btn-expand-learning" title="Expand Pembelajaran">
+        <div class="panel-collapsed-view" id="btn-expand-learning" title="Expand Learning">
           <button class="panel-toggle-btn">
             <i class="ti ti-chevron-left"></i>
           </button>
-          <span class="vertical-text">PEMBELAJARAN</span>
+          <span class="vertical-text">LEARNING</span>
         </div>
         <div class="learning-scroll">
           <section class="learn-section">
@@ -107,7 +110,13 @@
             <div id="starter-query-panel" class="panel-body learn-body"></div>
           </section>
           <section class="learn-section">
-            <div id="glossary-panel" class="panel-body learn-body"></div>
+            <div class="subpanel-title">Referensi Cepat</div>
+            <div class="panel-body learn-body">
+              <button id="learn-reference-launch" class="starter-btn" type="button">
+                <i class="ti ti-book-2"></i>
+                <span>Buka Glosarium & FAQ</span>
+              </button>
+            </div>
           </section>
           <section class="learn-section">
             <div id="history-panel" class="panel-body learn-body"></div>
@@ -140,6 +149,22 @@
           </div>
         </div>
         <div id="audit-detail" class="test-detail"></div>
+      </div>
+    </div>
+
+    <div id="reference-overlay" class="test-overlay" hidden>
+      <div class="reference-overlay-card">
+        <div class="test-overlay-head">
+          <b><i class="ti ti-book-2"></i> Glosarium & FAQ SQL</b>
+          <button id="reference-close" type="button" class="link-btn">Tutup</button>
+        </div>
+        <div class="reference-shell">
+          <aside class="reference-sidebar">
+            <input id="reference-search" class="app-input" placeholder="Cari istilah atau topik…" />
+            <div id="reference-list" class="reference-list"></div>
+          </aside>
+          <section id="reference-detail" class="reference-detail"></section>
+        </div>
       </div>
     </div>
   </body>

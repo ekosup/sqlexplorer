@@ -7,7 +7,7 @@ import { mountCaseStudyPanel } from './ui/caseStudyPanel';
 import { mountStarterQueryPanel } from './ui/starterQueryPanel';
 import { mountHistoryPanel } from './ui/historyPanel';
 import { mountExplainPanel } from './ui/explainPanel';
-import { mountGlossaryPanel } from './ui/glossaryPanel';
+import { mountReferencePanel } from './ui/referencePanel';
 import { mountQueryEditor } from './editor/queryEditor';
 import { formatSql } from './utils/sqlFormat';
 // Tabler Icons via npm (bukan CDN) — Vite bundle woff2-nya, offline-safe (NFR-01).
@@ -85,11 +85,13 @@ mountStarterQueryPanel($('starter-query-panel'), {
   onLoadQuery: setEditor,
   onExplain: (e) => explainPanel.set(e),
 });
-mountGlossaryPanel($('glossary-panel'));
+const referencePanel = mountReferencePanel($('reference-overlay'));
 const history = mountHistoryPanel($('history-panel'), { onPick: setEditor });
 
 const auditPanel = mountAuditPanel($('audit-overlay'));
 $('btn-audit').addEventListener('click', () => void auditPanel.open());
+$('btn-reference').addEventListener('click', () => void referencePanel.open());
+$('learn-reference-launch').addEventListener('click', () => void referencePanel.open());
 
 // Collapsible sidebars logic
 const panelSchema = $('panel-schema');
@@ -175,7 +177,7 @@ document.addEventListener('mouseup', () => {
 });
 
 // T18: stability test harness (QA tool, disabled sampai DB dimuat).
-const btnStability = $('btn-stability') as HTMLButtonElement;
+const btnStability = document.getElementById('btn-stability') as HTMLButtonElement | null;
 const testOverlay = $('test-overlay');
 const testClose = $('test-close');
 const testSummary = $('test-summary');
@@ -199,7 +201,7 @@ async function loadDbBytes(name: string, bytes: Uint8Array): Promise<void> {
     editor.updateSchema(schema);
     panelSchema.classList.add('db-loaded');
     dbLoaded = true;
-    btnStability.disabled = false;
+    if (btnStability) btnStability.disabled = false;
   } catch (err) {
     dbStatus.textContent = `Gagal memuat: ${(err as Error).message}`;
     dbStatus.classList.add('error');
@@ -236,10 +238,7 @@ const runQuery = async (): Promise<void> => {
   if (wasMaximized) {
     setEditorMaximized(false);
   }
-  
-  // Collapse editor to focus on results
-  setEditorCollapsed(true);
-  
+
   queryMeta.textContent = 'Menjalankan…';
   queryMeta.classList.remove('error');
   const t0 = performance.now();
@@ -268,7 +267,7 @@ const runQuery = async (): Promise<void> => {
       error: (err as Error).message,
     }).catch(() => {});
     
-    // If query failed, expand again so the user can fix the error
+    // Keep editor visible so the user can inspect or fix the query.
     setEditorCollapsed(false);
     if (wasMaximized) {
       setEditorMaximized(true);
@@ -319,20 +318,22 @@ const renderStabilityDetail = (r: StabilityReport): string => `
     </tbody>
   </table>`;
 
-btnStability.addEventListener('click', async () => {
-  if (!dbLoaded) return;
-  btnStability.disabled = true;
-  queryMeta.textContent = `Menjalankan uji stabilitas (${STABILITY_COUNT} query)…`;
-  queryMeta.classList.remove('error');
-  const report = await runStabilityTest(engine);
-  testSummary.innerHTML = renderStabilitySummary(report);
-  testDetail.innerHTML = renderStabilityDetail(report);
-  testOverlay.hidden = false;
-  const pass = report.workerAlive && report.failed === 0;
-  queryMeta.textContent = `Uji stabilitas: ${report.passed}/${report.rows.length} · ${report.totalMs} ms${report.workerAlive ? '' : ' · WORKER MATI'}`;
-  queryMeta.classList.toggle('error', !pass);
-  btnStability.disabled = false;
-});
+if (btnStability) {
+  btnStability.addEventListener('click', async () => {
+    if (!dbLoaded) return;
+    btnStability.disabled = true;
+    queryMeta.textContent = `Menjalankan uji stabilitas (${STABILITY_COUNT} query)…`;
+    queryMeta.classList.remove('error');
+    const report = await runStabilityTest(engine);
+    testSummary.innerHTML = renderStabilitySummary(report);
+    testDetail.innerHTML = renderStabilityDetail(report);
+    testOverlay.hidden = false;
+    const pass = report.workerAlive && report.failed === 0;
+    queryMeta.textContent = `Uji stabilitas: ${report.passed}/${report.rows.length} · ${report.totalMs} ms${report.workerAlive ? '' : ' · WORKER MATI'}`;
+    queryMeta.classList.toggle('error', !pass);
+    btnStability.disabled = false;
+  });
+}
 
 testClose.addEventListener('click', () => { testOverlay.hidden = true; });
 testOverlay.addEventListener('click', (e) => { if (e.target === testOverlay) testOverlay.hidden = true; });

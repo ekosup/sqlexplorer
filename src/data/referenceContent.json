@@ -1,0 +1,72 @@
+{
+  "groups": [
+    {
+      "id": "glossary",
+      "title": "Glosarium",
+      "icon": "ti-book-2",
+      "items": [
+        {
+          "id": "where",
+          "title": "WHERE",
+          "summary": "Menyaring baris sebelum data disajikan atau dikelompokkan.",
+          "body": "## WHERE\n\nGunakan WHERE untuk memfilter baris di tahap awal. Ini paling sering dipakai saat ingin menampilkan data tertentu saja.\n\n### Kapan dipakai?\n- Saat ingin membatasi baris hasil.\n- Sebelum GROUP BY dan HAVING.\n\n### Contoh\n```sql\nSELECT *\nFROM transaksi\nWHERE status = 'Lunas';\n```\n\n> WHERE bekerja pada baris, bukan hasil agregat."
+        },
+        {
+          "id": "group-by",
+          "title": "GROUP BY",
+          "summary": "Mengelompokkan baris berdasarkan nilai yang sama.",
+          "body": "## GROUP BY\n\nGROUP BY digunakan untuk menggabungkan baris yang punya nilai yang sama, biasanya dipakai bersama fungsi agregat seperti COUNT, SUM, atau AVG.\n\n### Contoh\n```sql\nSELECT cabang, COUNT(*) AS total_transaksi\nFROM transaksi\nGROUP BY cabang;\n```\n\n### Catatan\n- Kolom yang muncul di SELECT biasanya harus ada di GROUP BY atau menjadi bagian agregat."
+        },
+        {
+          "id": "having",
+          "title": "HAVING",
+          "summary": "Menyaring hasil agregat setelah GROUP BY.",
+          "body": "## HAVING\n\nHAVING mirip WHERE, tetapi bekerja setelah GROUP BY. Ia dipakai untuk menyaring kelompok hasil agregat.\n\n### Contoh\n```sql\nSELECT cabang, COUNT(*) AS total_transaksi\nFROM transaksi\nGROUP BY cabang\nHAVING COUNT(*) > 5;\n```"
+        },
+        {
+          "id": "join",
+          "title": "JOIN",
+          "summary": "Menggabungkan data dari dua tabel berdasarkan relasi tertentu.",
+          "body": "## JOIN\n\nJOIN menghubungkan baris dari dua tabel dengan basis kunci yang sama. Ini adalah inti dari analisis relasional.\n\n### Jenis yang sering dipakai\n- INNER JOIN: hanya baris yang cocok di kedua tabel.\n- LEFT JOIN: semua baris dari kiri tetap tampil, walau tidak ada pasangan di kanan.\n\n### Contoh\n```sql\nSELECT t.id, c.nama\nFROM transaksi t\nJOIN customer c ON c.id = t.customer_id;\n```"
+        },
+        {
+          "id": "cte",
+          "title": "CTE",
+          "summary": "Query sementara bernama untuk memperjelas alur logika SQL.",
+          "body": "## CTE\n\nCommon Table Expression (CTE) membuat subquery bernama yang bisa dipakai berulang dalam satu query.\n\n### Contoh\n```sql\nWITH transaksi_lunas AS (\n  SELECT *\n  FROM transaksi\n  WHERE status = 'Lunas'\n)\nSELECT *\nFROM transaksi_lunas;\n```"
+        },
+        {
+          "id": "select",
+          "title": "SELECT",
+          "summary": "Perintah dasar untuk membaca data dari tabel.",
+          "body": "## SELECT\n\nSELECT menentukan kolom apa saja yang ingin ditampilkan dari hasil query.\n\n### Contoh\n```sql\nSELECT tanggal, cabang, nilai\nFROM transaksi;\n```"
+        }
+      ]
+    },
+    {
+      "id": "faq",
+      "title": "FAQ",
+      "icon": "ti-help-circle",
+      "items": [
+        {
+          "id": "execution-order",
+          "title": "Urutan eksekusi SQL",
+          "summary": "Memahami urutan logis dari FROM, WHERE, GROUP BY, HAVING, SELECT, ORDER BY.",
+          "body": "## Urutan eksekusi SQL\n\nSecara logika, SQL biasanya dibaca dan dijalankan dalam urutan berikut:\n\n1. FROM\n2. WHERE\n3. GROUP BY\n4. HAVING\n5. SELECT\n6. ORDER BY\n\n### Kenapa penting?\nKarena pemahaman urutan ini membantu saat menulis query yang benar, terutama saat ada filter, agregasi, dan sorting.\n\n### Contoh ringkas\n```sql\nSELECT cabang, COUNT(*) AS total\nFROM transaksi\nWHERE status = 'Lunas'\nGROUP BY cabang\nHAVING COUNT(*) > 1\nORDER BY total DESC;\n```"
+        },
+        {
+          "id": "empty-results",
+          "title": "Kenapa hasil query kosong?",
+          "summary": "Biasanya karena filter terlalu ketat atau data tidak cocok.",
+          "body": "## Kenapa hasil query kosong?\n\nHasil kosong bisa muncul karena beberapa alasan: \n\n- Filter WHERE terlalu ketat.\n- Tidak ada data yang cocok dengan JOIN.\n- Nama kolom atau tabel salah.\n\n### Langkah cepat\n1. Cek data di tabel sumber.\n2. Kurangi filter secara bertahap.\n3. Pastikan nama kolom sesuai schema."
+        },
+        {
+          "id": "alias",
+          "title": "Apa itu alias?",
+          "summary": "Alias memberi nama singkat atau lebih jelas untuk kolom atau tabel.",
+          "body": "## Alias\n\nAlias membantu membuat hasil query lebih mudah dibaca.\n\n### Contoh\n```sql\nSELECT COUNT(*) AS total_transaksi\nFROM transaksi;\n```\n\nDi sini `AS total_transaksi` memberi nama untuk kolom hasil."
+        }
+      ]
+    }
+  ]
+}
