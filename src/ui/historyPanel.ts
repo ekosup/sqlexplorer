@@ -19,7 +19,7 @@ export const mountHistoryPanel = (host: HTMLElement, opts: { onPick: (sql: strin
 
   const render = (): void => {
     list.innerHTML = items
-      .map((s, i) => `<li><button data-i="${i}" class="history-btn" type="button"><i class="ti ti-history"></i> ${esc(s.slice(0, 80))}</button></li>`)
+      .map((s, i) => `<li><button data-i="${i}" class="history-btn" type="button"><i class="ti ti-history"></i><span style="display:block; width:100%; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${esc(s.slice(0, 50))}</span></button></li>`)
       .join('');
     list.querySelectorAll<HTMLButtonElement>('button[data-i]').forEach((b) =>
       b.addEventListener('click', () => opts.onPick(items[Number(b.dataset.i)]!)),

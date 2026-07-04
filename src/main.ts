@@ -9,6 +9,7 @@ import { mountHistoryPanel } from './ui/historyPanel';
 import { mountExplainPanel } from './ui/explainPanel';
 import { mountGlossaryPanel } from './ui/glossaryPanel';
 import { mountQueryEditor } from './editor/queryEditor';
+import { formatSql } from './utils/sqlFormat';
 // Tabler Icons via npm (bukan CDN) — Vite bundle woff2-nya, offline-safe (NFR-01).
 import '@tabler/icons-webfont/dist/tabler-icons.min.css';
 import { runStabilityTest, STABILITY_COUNT, type StabilityReport } from './stability/harness';
@@ -69,7 +70,7 @@ const setEditorMaximized = (maximized: boolean): void => {
 
 const setEditor = (sql: string): void => {
   setEditorCollapsed(false);
-  editor.setValue(sql);
+  editor.setValue(formatSql(sql));
   editor.focus();
 };
 
