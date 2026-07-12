@@ -170,6 +170,31 @@ html, body { height: 100%; margin: 0; background: var(--bg); overflow: hidden; t
 .dark-theme .theme-toggle-btn .icon-moon { display: block; }
 .dark-theme .theme-toggle-btn .icon-sun { display: none; }
 
+.network-status { 
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px; 
+  font-weight: 500;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+  transition: all 0.2s ease;
+}
+.network-status .ti {
+  font-size: 14px;
+}
+.network-status.online {
+  color: var(--ok-text);
+  background: var(--ok-bg);
+  border-color: var(--ok-border);
+}
+.network-status.offline {
+  color: var(--danger);
+  background: var(--warn-bg);
+  border-color: var(--warn-border);
+}
+
 .db-status { 
   display: flex;
   align-items: center;

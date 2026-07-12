@@ -582,3 +582,24 @@ void (async () => {
     await clearSavedDb();
   }
 })();
+
+// Network status handling for offline capabilities.
+const networkStatusEl = $('network-status');
+const updateNetworkStatus = (): void => {
+  const iconEl = networkStatusEl.querySelector('i');
+  const textEl = networkStatusEl.querySelector('span');
+  if (navigator.onLine) {
+    networkStatusEl.className = 'network-status online';
+    networkStatusEl.title = 'Terhubung ke internet';
+    if (iconEl) iconEl.className = 'ti ti-wifi';
+    if (textEl) textEl.textContent = 'Online';
+  } else {
+    networkStatusEl.className = 'network-status offline';
+    networkStatusEl.title = 'Bekerja secara offline';
+    if (iconEl) iconEl.className = 'ti ti-wifi-off';
+    if (textEl) textEl.textContent = 'Offline';
+  }
+};
+window.addEventListener('online', updateNetworkStatus);
+window.addEventListener('offline', updateNetworkStatus);
+updateNetworkStatus();
