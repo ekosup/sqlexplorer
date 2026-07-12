@@ -26,7 +26,7 @@ export default defineConfig({
       registerType: 'autoUpdate',
       injectRegister: 'inline',
       manifest: {
-        name: 'SQLExplorer — Belajar SQL Audit',
+        name: 'SQLExplorer — SQL Learning Tool',
         short_name: 'SQLExplorer',
         description: 'SQL Explorer berbasis browser untuk belajar SQL audit akuntansi',
         theme_color: '#2563eb',
