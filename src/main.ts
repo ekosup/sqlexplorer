@@ -3,6 +3,8 @@ import { saveDb, loadSavedDb, clearSavedDb } from './db/persist';
 import { mountFileLoader } from './ui/fileLoader';
 import { mountSchemaBrowser } from './ui/schemaBrowser';
 import { mountResultGrid } from './ui/resultGrid';
+import { mountChartView } from './ui/chartView';
+import { mountImportPanel } from './ui/importPanel';
 import { mountCaseStudyPanel } from './ui/caseStudyPanel';
 import { mountStarterQueryPanel } from './ui/starterQueryPanel';
 import { mountHistoryPanel } from './ui/historyPanel';
@@ -37,6 +39,8 @@ const btnToggleEditor = $('btn-toggle-editor');
 const editorToggleIcon = $('editor-toggle-icon');
 const btnMaximizeEditor = $('btn-maximize-editor');
 const editorMaximizeIcon = $('editor-maximize-icon');
+const btnMaximizeResults = $('btn-maximize-results');
+const resultsMaximizeIcon = $('results-maximize-icon');
 
 const setEditorCollapsed = (collapsed: boolean): void => {
   if (collapsed) {
@@ -53,8 +57,11 @@ const setEditorCollapsed = (collapsed: boolean): void => {
   }
 };
 
-const setEditorMaximized = (maximized: boolean): void => {
+function setEditorMaximized(maximized: boolean): void {
   if (maximized) {
+    if (document.body.classList.contains('maximized-results')) {
+      setResultsMaximized(false);
+    }
     document.body.classList.add('maximized-editor');
     editorMaximizeIcon.className = 'ti ti-minimize';
     btnMaximizeEditor.title = 'Restore Editor';
@@ -66,7 +73,22 @@ const setEditorMaximized = (maximized: boolean): void => {
     editorMaximizeIcon.className = 'ti ti-maximize';
     btnMaximizeEditor.title = 'Maximize Editor';
   }
-};
+}
+
+function setResultsMaximized(maximized: boolean): void {
+  if (maximized) {
+    if (document.body.classList.contains('maximized-editor')) {
+      setEditorMaximized(false);
+    }
+    document.body.classList.add('maximized-results');
+    resultsMaximizeIcon.className = 'ti ti-minimize';
+    btnMaximizeResults.title = 'Restore Results';
+  } else {
+    document.body.classList.remove('maximized-results');
+    resultsMaximizeIcon.className = 'ti ti-maximize';
+    btnMaximizeResults.title = 'Maximize Results';
+  }
+}
 
 const setEditor = (sql: string): void => {
   setEditorCollapsed(false);
@@ -75,6 +97,9 @@ const setEditor = (sql: string): void => {
 };
 
 const resultGrid = mountResultGrid($('result-grid'));
+const chartView = mountChartView($('chart-view'));
+const resultHost = $('result-grid');
+const chartHost = $('chart-view');
 const explainPanel = mountExplainPanel($('explain-panel'));
 const schemaBrowser = mountSchemaBrowser($('schema-browser'));
 const caseStudy = mountCaseStudyPanel($('case-study-panel'), {
@@ -92,6 +117,26 @@ const auditPanel = mountAuditPanel($('audit-overlay'));
 $('btn-audit').addEventListener('click', () => void auditPanel.open());
 $('btn-reference').addEventListener('click', () => void referencePanel.open());
 $('learn-reference-launch').addEventListener('click', () => void referencePanel.open());
+
+// Import Excel/CSV → SQLite. DB tetap di worker; setelah import refresh schema + persist.
+const importPanel = mountImportPanel($('import-overlay'), {
+  onImport: async (tableName, columns, rows) => {
+    await engine.importData(tableName, columns, rows);
+    const schema = await engine.getSchema();
+    schemaBrowser.render(schema);
+    editor.updateSchema(schema);
+    panelSchema.classList.add('db-loaded');
+    dbLoaded = true;
+    if (!currentDbName) { currentDbName = 'imported.sqlite'; caseStudy.setLoadedDbName(currentDbName); }
+    if (btnStability) btnStability.disabled = false;
+    // Persist hasil import agar selamat dari refresh.
+    const bytes = await engine.exportDb();
+    dbStatus.textContent = `${currentDbName} · ${(bytes.byteLength / 1024).toFixed(1)} KB`;
+    dbStatus.classList.remove('error'); dbStatus.classList.add('ok');
+    await saveDb(currentDbName, new Uint8Array(bytes).buffer);
+  },
+});
+$('btn-import').addEventListener('click', () => importPanel.pick());
 
 // Collapsible sidebars logic
 const panelSchema = $('panel-schema');
@@ -140,28 +185,37 @@ btnMaximizeEditor.addEventListener('click', () => {
   setEditorMaximized(!isMaximized);
 });
 
+btnMaximizeResults.addEventListener('click', () => {
+  const isMaximized = document.body.classList.contains('maximized-results');
+  setResultsMaximized(!isMaximized);
+});
+
 // Query Editor Resizing
 const resizeHandle = $('editor-resize-handle');
 let isResizing = false;
+let startY = 0;
+let startHeight = 0;
 
 resizeHandle.addEventListener('mousedown', (e) => {
   e.preventDefault();
   isResizing = true;
+  startY = e.clientY;
+  startHeight = editorSlot.getBoundingClientRect().height;
   resizeHandle.classList.add('active');
   document.body.style.cursor = 'row-resize';
+  document.body.style.userSelect = 'none';
 });
 
 document.addEventListener('mousemove', (e) => {
   if (!isResizing) return;
+  const deltaY = e.clientY - startY;
   const workspaceRect = panelWorkspace.getBoundingClientRect();
   const titleRect = panelWorkspace.querySelector('.panel-title')!.getBoundingClientRect();
-  const relativeY = e.clientY - workspaceRect.top;
-  
   const titleHeight = titleRect.height;
   const minHeight = 60;
   const maxHeight = workspaceRect.height - titleHeight - 120;
   
-  let newHeight = relativeY - titleHeight;
+  let newHeight = startHeight + deltaY;
   if (newHeight < minHeight) newHeight = minHeight;
   if (newHeight > maxHeight) newHeight = maxHeight;
   
@@ -173,6 +227,7 @@ document.addEventListener('mouseup', () => {
     isResizing = false;
     resizeHandle.classList.remove('active');
     document.body.style.cursor = '';
+    document.body.style.userSelect = '';
   }
 });
 
@@ -227,13 +282,96 @@ mountFileLoader($('file-loader'), {
   },
 });
 
-let lastRows: unknown[][] = [];
-let lastCols: string[] = [];
+// ---- Multi-console tabs (UI-only; logika query tetap sama, hanya state per-tab) ----
+type ConsoleTab = { id: number; name: string; sql: string; cols: string[]; rows: unknown[][]; meta: string; metaErr: boolean; canExport: boolean };
+const tabsBar = $('editor-tabs');
+let tabs: ConsoleTab[] = [];
+let activeId = 0;
+let tabSeq = 0;
+let resultView: 'table' | 'chart' = 'table';
+
+const activeTab = (): ConsoleTab => tabs.find((t) => t.id === activeId)!;
+
+const renderTabs = (): void => {
+  tabsBar.innerHTML = tabs.map((t) =>
+    `<div class="etab${t.id === activeId ? ' active' : ''}" data-id="${t.id}" title="${escHtml(t.name)}">` +
+      `<span class="etab-name">${escHtml(t.name)}</span>` +
+      (tabs.length > 1 ? `<button class="etab-close" data-close="${t.id}" title="Tutup">×</button>` : '') +
+    `</div>`).join('') +
+    `<button class="etab-add" id="etab-add" type="button" title="Console baru"><i class="ti ti-plus"></i></button>`;
+};
+
+const showActiveResults = (): void => {
+  const t = activeTab();
+  if (resultView === 'chart') {
+    chartHost.hidden = false; resultHost.hidden = true;
+    chartView.render(t.cols, t.rows);
+  } else {
+    chartHost.hidden = true; resultHost.hidden = false;
+    if (t.cols.length) resultGrid.render(t.cols, t.rows); else resultGrid.clear();
+  }
+};
+
+const restoreActive = (): void => {
+  const t = activeTab();
+  editor.setValue(t.sql);
+  queryMeta.textContent = t.meta;
+  queryMeta.classList.toggle('error', t.metaErr);
+  exportBtn.disabled = !t.canExport;
+  showActiveResults();
+};
+
+const saveActive = (): void => { const t = tabs.find((x) => x.id === activeId); if (t) t.sql = editor.getValue(); };
+
+const activateTab = (id: number): void => {
+  saveActive(); activeId = id; renderTabs(); restoreActive(); editor.focus();
+};
+
+const addTab = (): void => {
+  saveActive();
+  const id = ++tabSeq;
+  tabs.push({ id, name: `Console ${id}`, sql: '', cols: [], rows: [], meta: '', metaErr: false, canExport: false });
+  activeId = id; renderTabs(); restoreActive(); editor.focus();
+};
+
+const closeTab = (id: number): void => {
+  if (tabs.length <= 1) return;
+  const idx = tabs.findIndex((t) => t.id === id);
+  tabs = tabs.filter((t) => t.id !== id);
+  if (activeId === id) activeId = tabs[Math.max(0, idx - 1)].id;
+  renderTabs(); restoreActive();
+};
+
+tabsBar.addEventListener('click', (e) => {
+  const target = e.target as HTMLElement;
+  const closeBtn = target.closest<HTMLElement>('.etab-close');
+  if (closeBtn) { e.stopPropagation(); closeTab(Number(closeBtn.dataset.close)); return; }
+  if (target.closest('#etab-add')) { addTab(); return; }
+  const tab = target.closest<HTMLElement>('.etab');
+  if (tab) activateTab(Number(tab.dataset.id));
+});
+
+const viewTableBtn = $('view-table');
+const viewChartBtn = $('view-chart');
+const setView = (v: 'table' | 'chart'): void => {
+  resultView = v;
+  viewTableBtn.classList.toggle('active', v === 'table');
+  viewChartBtn.classList.toggle('active', v === 'chart');
+  showActiveResults();
+};
+viewTableBtn.addEventListener('click', () => setView('table'));
+viewChartBtn.addEventListener('click', () => setView('chart'));
+
+// bootstrap console pertama
+tabs.push({ id: ++tabSeq, name: 'Console 1', sql: '', cols: [], rows: [], meta: '', metaErr: false, canExport: false });
+activeId = tabSeq;
+renderTabs();
 
 const runQuery = async (): Promise<void> => {
   const sql = editor.getValue().trim();
   if (!sql) return;
-  
+  const t = activeTab();
+
   const wasMaximized = document.body.classList.contains('maximized-editor');
   if (wasMaximized) {
     setEditorMaximized(false);
@@ -245,11 +383,14 @@ const runQuery = async (): Promise<void> => {
   try {
     const result = await engine.execQuery(sql);
     const ms = Math.round(performance.now() - t0);
-    lastCols = result.columns;
-    lastRows = result.values;
-    resultGrid.render(result.columns, result.values);
-    queryMeta.textContent = `${result.values.length} baris · ${ms} ms`;
-    exportBtn.disabled = result.values.length === 0;
+    t.cols = result.columns;
+    t.rows = result.values;
+    t.meta = `${result.values.length} baris · ${ms} ms`;
+    t.metaErr = false;
+    t.canExport = result.values.length > 0;
+    queryMeta.textContent = t.meta;
+    exportBtn.disabled = !t.canExport;
+    showActiveResults();
     history.push(sql);
     // Audit (best-effort; IDB error tidak boleh ganggu UX query). Hanya saat DB aktif.
     if (dbLoaded) void appendAudit({
@@ -258,15 +399,17 @@ const runQuery = async (): Promise<void> => {
     }).catch(() => {});
   } catch (err) {
     const ms = Math.round(performance.now() - t0);
-    queryMeta.textContent = (err as Error).message;
+    t.cols = []; t.rows = []; t.canExport = false;
+    t.meta = (err as Error).message; t.metaErr = true;
+    queryMeta.textContent = t.meta;
     queryMeta.classList.add('error');
-    resultGrid.clear();
+    showActiveResults();
     exportBtn.disabled = true;
     if (dbLoaded) void appendAudit({
       ts: Date.now(), dbName: currentDbName, sql, ms, rowCount: 0, text: '',
       error: (err as Error).message,
     }).catch(() => {});
-    
+
     // Keep editor visible so the user can inspect or fix the query.
     setEditorCollapsed(false);
     if (wasMaximized) {
@@ -278,8 +421,9 @@ const runQuery = async (): Promise<void> => {
 runBtn.addEventListener('click', () => void runQuery());
 
 exportBtn.addEventListener('click', () => {
-  if (!lastCols.length) return;
-  const csv = toCsv(lastCols, lastRows);
+  const t = activeTab();
+  if (!t.cols.length) return;
+  const csv = toCsv(t.cols, t.rows);
   const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -298,8 +442,9 @@ const toCsv = (cols: string[], rows: unknown[][]): string => {
   return [cols.map(esc).join(','), ...rows.map((r) => r.map(esc).join(','))].join('\n');
 };
 
-const escHtml = (s: string): string =>
-  s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!);
+function escHtml(s: string): string {
+  return s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[c]!);
+}
 
 const renderStabilitySummary = (r: StabilityReport): string => {
   const pass = r.workerAlive && r.failed === 0;

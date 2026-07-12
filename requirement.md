@@ -295,3 +295,25 @@ Rilis dinyatakan siap dipakai kelas jika semua poin ini lulus:
 - Simpan starter query + case study di JSON agar dosen bisa update tanpa ubah kode inti.
 - Hindari framework UI besar untuk menjaga bundle kecil dan maintenance ringan.
 - `ponytail:` v1 cukup validasi schema JSON ringan (manual check field wajib), tambah JSON Schema formal hanya jika konten mulai sering error.
+
+Week 6
+2. Menerapkan EDA dalam rangka mekakukan analisis ASOSIASI;
+3. Membuat visualisasi hasil analisis Asosiasi;
+4. Membuat model analisis asosiasi menggunakan data latih;
+5. Melakukan evauasi skor matriks kehadalan model asosiasi;
+6. Membuat prediksi aosiasi dengan menggunakan data uji;
+7. Merumusakan simpulan model asosiasi dan hasil analisisnya
+Kriteria
+1. Membuat model asosiasi secara tepat; 
+2. Menerapkan CRISP-DM secara tepat dalam membuat model asosiasi; 
+3. Menuangkan analisis ke dalam model visualisasi secara efektif. 
+4. Menuangkan intepretasi hasil analisis secara tepat
+
+
+curl -sL https://github.com/bitnami/sealed-secrets/releases/download/v0.38.4/controller.yaml \
+  | sed 's/namespace: kube-system/namespace: klc-dev/g' \
+  | oc apply -f -
+
+DB_PASSWORD: TojW8yTa4xIBaF6
+MYSQL_PASSWORD: Int3grit4s
+SYSTEM_API_BEARER_TOKEN: system-secret-token

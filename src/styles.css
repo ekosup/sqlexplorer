@@ -645,11 +645,29 @@ html, body { height: 100%; margin: 0; background: var(--bg); overflow: hidden; t
 /* Maximized Editor State */
 .maximized-editor .panel-schema,
 .maximized-editor .panel-learning,
+.maximized-editor .result-toolbar,
 .maximized-editor #result-grid,
+.maximized-editor #chart-view,
 .maximized-editor #editor-resize-handle {
   display: none !important;
 }
 .maximized-editor #query-editor {
+  flex: 1 !important;
+  height: auto !important;
+}
+
+/* Maximized Results State */
+.maximized-results .panel-schema,
+.maximized-results .panel-learning,
+.maximized-results .panel-title,
+.maximized-results #editor-tabs,
+.maximized-results #query-editor,
+.maximized-results .editor-actions,
+.maximized-results #editor-resize-handle {
+  display: none !important;
+}
+.maximized-results #result-grid:not([hidden]),
+.maximized-results #chart-view:not([hidden]) {
   flex: 1 !important;
   height: auto !important;
 }
@@ -1030,3 +1048,368 @@ table.result tr:hover td {
 }
 .audit-sql { color: var(--accent, #2563eb); font-weight: 500; }
 .audit-error { color: var(--danger, #b3261e); }
+
+/* ===== Multi-console tabs ===== */
+.editor-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  padding: 6px 8px 0;
+  background: var(--panel-header);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+.etab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 12.5px;
+  color: var(--muted);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 180px;
+}
+.etab .etab-name { overflow: hidden; text-overflow: ellipsis; }
+.etab.active {
+  color: var(--text);
+  background: var(--editor-bg);
+  font-weight: 600;
+}
+.etab-close {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 2px;
+  border-radius: 4px;
+}
+.etab-close:hover { background: var(--table-hover); color: var(--danger); }
+.etab-add {
+  border: 1px dashed var(--border);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 4px 8px;
+  align-self: center;
+  margin-left: 2px;
+}
+.etab-add:hover { color: var(--accent); border-color: var(--accent); }
+
+/* ===== Result view toggle ===== */
+.result-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--panel-header);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.result-view-toggle { display: flex; gap: 4px; }
+.view-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 6px;
+}
+.view-btn.active { color: var(--text); background: var(--editor-bg); border-color: var(--accent); font-weight: 600; }
+.view-btn:hover:not(.active) { background: var(--table-hover); }
+
+/* ===== Chart view ===== */
+.chart-slot {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 8px;
+  background: var(--editor-bg);
+  box-sizing: border-box;
+}
+.chart-controls {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+  padding: 4px 4px 10px;
+  flex-wrap: wrap;
+}
+.chart-selectors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.chart-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.chart-controls select {
+  font-size: 12.5px;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+}
+.chart-export-actions {
+  display: flex;
+  gap: 8px;
+}
+.chart-export-actions button {
+  padding: 4px 10px;
+  font-size: 12px;
+  height: 28px;
+  border-radius: 6px;
+}
+.chart-canvas {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+  position: relative;
+  width: 100%;
+}
+.chart-svg {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  aspect-ratio: 720 / 380;
+}
+.ch-axis { stroke: var(--muted); stroke-width: 1; }
+.ch-grid { stroke: var(--border); stroke-width: 1; stroke-dasharray: 2 3; }
+.ch-bar { fill: var(--accent); opacity: 0.85; }
+.ch-line { fill: none; stroke: var(--accent); stroke-width: 2; }
+.ch-pt { fill: var(--accent); }
+.ch-lbl-y { fill: var(--muted); font-size: 10px; text-anchor: end; }
+.ch-lbl-x { fill: var(--muted); font-size: 10px; text-anchor: start; }
+.ch-lbl-x-c { fill: var(--muted); font-size: 10px; text-anchor: middle; }
+.ch-title { fill: var(--text); font-size: 12px; text-anchor: middle; font-weight: 600; }
+
+/* ===== Import Excel overlay ===== */
+.import-card {
+  width: min(920px, 94vw);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.import-card .test-overlay-head {
+  padding: 16px 24px;
+}
+
+.import-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.import-config-card {
+  background: var(--panel-header);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: var(--shadow-sm);
+}
+
+.import-config-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+@media (min-width: 640px) {
+  .import-config-grid {
+    grid-template-columns: 1.2fr 1fr;
+  }
+}
+
+.imp-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.imp-field > label {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.imp-sheets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-content: flex-start;
+  min-height: 32px;
+}
+
+.imp-sheet-btn {
+  font-size: 12px;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--muted);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-weight: 500;
+}
+
+.imp-sheet-btn:hover {
+  border-color: var(--border-focus);
+  color: var(--text);
+  background: var(--table-hover);
+}
+
+.imp-sheet-btn.active {
+  color: var(--accent);
+  background: rgba(37, 99, 235, 0.08);
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.dark-theme .imp-sheet-btn.active {
+  background: rgba(59, 130, 246, 0.12);
+}
+
+/* Specific styling for table name input in import controls to remove margin bottom */
+.import-config-grid #imp-table-name.app-input {
+  margin-bottom: 0;
+}
+
+.import-config-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.imp-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+  font-weight: 500;
+}
+
+.imp-check input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+.imp-info-badge {
+  background: rgba(37, 99, 235, 0.08);
+  color: var(--accent);
+  border: 1px solid rgba(37, 99, 235, 0.15);
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dark-theme .imp-info-badge {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.2);
+}
+
+.import-preview-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-height: 200px;
+}
+
+.import-preview-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.import-preview {
+  flex: 1;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.import-preview table.result {
+  font-size: 12px;
+}
+
+.import-preview .imp-type {
+  font-size: 9.5px;
+  color: var(--muted);
+  font-weight: 500;
+  background: var(--bg);
+  padding: 1px 4px;
+  border-radius: 3px;
+  display: inline-block;
+  margin-top: 3px;
+}
+
+.import-preview table.result th {
+  padding: 10px 12px;
+}
+
+.import-preview table.result td {
+  padding: 8px 12px;
+}
+
+.import-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  background: var(--panel-header);
+  border-radius: 0 0 8px 8px;
+}

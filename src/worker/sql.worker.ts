@@ -20,6 +20,8 @@ const requireDb = async (): Promise<Database> => {
   return dbPromise;
 };
 
+const quoteIdent = (s: string): string => '"' + s.replace(/"/g, '""') + '"';
+
 const handle = async (req: WorkerRequest): Promise<unknown> => {
   switch (req.kind) {
     case 'loadDb': {
@@ -41,6 +43,41 @@ const handle = async (req: WorkerRequest): Promise<unknown> => {
     case 'getSchema': {
       const db = await requireDb();
       return readSchema(db);
+    }
+    case 'importData': {
+      // Import Excel/CSV → tabel baru. Bypass read-only guard (ini fitur import, bukan query user).
+      // Buat DB kosong bila belum ada satupun DB dimuat.
+      if (!dbPromise) {
+        const SQL = await sqlPromise;
+        dbPromise = Promise.resolve(new SQL.Database());
+      }
+      const db = await dbPromise;
+      const tbl = quoteIdent(req.tableName);
+      const colDefs = req.columns.map((c) => `${quoteIdent(c.name)} ${c.type}`).join(', ');
+      db.run(`DROP TABLE IF EXISTS ${tbl}`);
+      db.run(`CREATE TABLE ${tbl} (${colDefs})`);
+      const placeholders = req.columns.map(() => '?').join(', ');
+      const stmt = db.prepare(`INSERT INTO ${tbl} VALUES (${placeholders})`);
+      try {
+        db.run('BEGIN');
+        for (const row of req.rows) {
+          const bind = row.map((v) =>
+            v == null ? null : typeof v === 'boolean' ? (v ? 1 : 0) : (v as string | number),
+          );
+          stmt.run(bind as (string | number | null)[]);
+        }
+        db.run('COMMIT');
+      } catch (e) {
+        db.run('ROLLBACK');
+        throw e;
+      } finally {
+        stmt.free();
+      }
+      return null;
+    }
+    case 'exportDb': {
+      const db = await requireDb();
+      return db.export();
     }
   }
 };

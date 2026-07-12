@@ -1,4 +1,4 @@
-import type { WorkerRequest, WorkerResponse, QueryResult, TableSchema } from './types';
+import type { WorkerRequest, WorkerResponse, QueryResult, TableSchema, ImportColumn } from './types';
 import SqlWorker from '../worker/sql.worker?worker';
 
 export class SqlEngine {
@@ -35,5 +35,13 @@ export class SqlEngine {
 
   getSchema(): Promise<TableSchema[]> {
     return this.send<TableSchema[]>({ id: ++this.seq, kind: 'getSchema' });
+  }
+
+  importData(tableName: string, columns: ImportColumn[], rows: unknown[][]): Promise<void> {
+    return this.send<void>({ id: ++this.seq, kind: 'importData', tableName, columns, rows });
+  }
+
+  exportDb(): Promise<Uint8Array> {
+    return this.send<Uint8Array>({ id: ++this.seq, kind: 'exportDb' });
   }
 }
