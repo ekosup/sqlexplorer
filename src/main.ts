@@ -189,12 +189,16 @@ const importPanel = mountImportPanel($('import-overlay'), {
     dbStatus.textContent = `${currentDbName} · ${(bytes.byteLength / 1024).toFixed(1)} KB`;
     dbStatus.classList.remove('error'); dbStatus.classList.add('ok');
     await saveDb(currentDbName, new Uint8Array(bytes).buffer);
+    localStorage.setItem('sqlexplorer_has_saved_db', 'true');
   },
 });
 $('btn-import').addEventListener('click', () => importPanel.pick());
 
 // Collapsible sidebars logic
 const panelSchema = $('panel-schema');
+if (localStorage.getItem('sqlexplorer_has_saved_db') === 'true') {
+  panelSchema.classList.add('db-loaded');
+}
 const btnCollapseSchema = $('btn-collapse-schema');
 const btnExpandSchema = $('btn-expand-schema');
 
@@ -326,6 +330,7 @@ mountFileLoader($('file-loader'), {
       await loadDbBytes(file.name, new Uint8Array(arrayBuf));
       // Upload baru menimpa entry tersimpan → DB lama hilang, DB baru persist.
       await saveDb(file.name, arrayBuf);
+      localStorage.setItem('sqlexplorer_has_saved_db', 'true');
     } catch {
       // status error sudah di-set oleh loadDbBytes.
     }
@@ -334,6 +339,7 @@ mountFileLoader($('file-loader'), {
     if (!confirm('Hapus database tersimpan? Refresh berikutnya kembali ke kondisi kosong.')) return;
     await clearSavedDb();
     localStorage.removeItem(LOCAL_STORAGE_KEY);
+    localStorage.removeItem('sqlexplorer_has_saved_db');
     location.reload();
   },
 });
@@ -574,12 +580,19 @@ testOverlay.addEventListener('click', (e) => { if (e.target === testOverlay) tes
 // Hilang hanya via tombol "Clear DB" atau upload file baru.
 void (async () => {
   const saved = await loadSavedDb();
-  if (!saved) return;
+  if (!saved) {
+    panelSchema.classList.remove('db-loaded');
+    localStorage.removeItem('sqlexplorer_has_saved_db');
+    return;
+  }
   try {
     await loadDbBytes(saved.name, new Uint8Array(saved.bytes));
+    localStorage.setItem('sqlexplorer_has_saved_db', 'true');
   } catch {
     // ponytail: entry korup/tak terbaca → bersihkan agar startup berikutnya bersih.
     await clearSavedDb();
+    panelSchema.classList.remove('db-loaded');
+    localStorage.removeItem('sqlexplorer_has_saved_db');
   }
 })();
 

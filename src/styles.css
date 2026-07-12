@@ -340,7 +340,6 @@ html, body { height: 100%; margin: 0; background: var(--bg); overflow: hidden; t
 }
 
 .file-loader-wrapper {
-  transition: all 0.25s ease;
 }
 
 /* File Loader & Dropzone States */
@@ -371,7 +370,7 @@ html, body { height: 100%; margin: 0; background: var(--bg); overflow: hidden; t
   border-radius: 8px;
   background: var(--panel-header);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
 }
 .panel-schema:not(.db-loaded) .drop-zone-content {
   display: flex;
@@ -415,7 +414,7 @@ html, body { height: 100%; margin: 0; background: var(--bg); overflow: hidden; t
   border-radius: 6px;
   background: var(--panel-header);
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
   flex: 1;
   min-width: 0;
 }
