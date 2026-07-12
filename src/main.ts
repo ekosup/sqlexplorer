@@ -34,7 +34,50 @@ const exportBtn = $('export-csv') as HTMLButtonElement;
 const saveQueryBtn = $('save-query') as HTMLButtonElement;
 const queryMeta = $('query-meta');
 
-const editor = mountQueryEditor(editorSlot, { onRun: () => void runQuery() });
+const LOCAL_STORAGE_KEY = 'sqlexplorer_console_tabs';
+type ConsoleTab = { id: number; name: string; sql: string; cols: string[]; rows: unknown[][]; meta: string; metaErr: boolean; canExport: boolean };
+let tabs: ConsoleTab[] = [];
+let activeId = 0;
+let tabSeq = 0;
+
+let saveTimeout: any = null;
+const saveTabsToStorage = (): void => {
+  try {
+    const data = {
+      tabs: tabs.map(t => ({
+        id: t.id,
+        name: t.name,
+        sql: t.sql,
+        meta: t.meta,
+        metaErr: t.metaErr,
+        canExport: t.canExport
+      })),
+      activeId,
+      tabSeq,
+    };
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(data));
+  } catch (e) {
+    console.error('Failed to save tabs to storage', e);
+  }
+};
+
+const saveTabsDebounced = (): void => {
+  if (saveTimeout) clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(() => {
+    saveTabsToStorage();
+  }, 300);
+};
+
+const editor = mountQueryEditor(editorSlot, {
+  onRun: () => void runQuery(),
+  onChange: (sql) => {
+    const t = tabs.find((x) => x.id === activeId);
+    if (t) {
+      t.sql = sql;
+      saveTabsDebounced();
+    }
+  }
+});
 
 const panelWorkspace = $('panel-workspace');
 const btnToggleEditor = $('btn-toggle-editor');
@@ -290,16 +333,13 @@ mountFileLoader($('file-loader'), {
   onClear: async () => {
     if (!confirm('Hapus database tersimpan? Refresh berikutnya kembali ke kondisi kosong.')) return;
     await clearSavedDb();
+    localStorage.removeItem(LOCAL_STORAGE_KEY);
     location.reload();
   },
 });
 
 // ---- Multi-console tabs (UI-only; logika query tetap sama, hanya state per-tab) ----
-type ConsoleTab = { id: number; name: string; sql: string; cols: string[]; rows: unknown[][]; meta: string; metaErr: boolean; canExport: boolean };
 const tabsBar = $('editor-tabs');
-let tabs: ConsoleTab[] = [];
-let activeId = 0;
-let tabSeq = 0;
 let resultView: 'table' | 'chart' = 'table';
 
 const activeTab = (): ConsoleTab => tabs.find((t) => t.id === activeId)!;
@@ -337,6 +377,7 @@ const saveActive = (): void => { const t = tabs.find((x) => x.id === activeId); 
 
 const activateTab = (id: number): void => {
   saveActive(); activeId = id; renderTabs(); restoreActive(); editor.focus();
+  saveTabsToStorage();
 };
 
 const addTab = (): void => {
@@ -344,6 +385,7 @@ const addTab = (): void => {
   const id = ++tabSeq;
   tabs.push({ id, name: `Console ${id}`, sql: '', cols: [], rows: [], meta: '', metaErr: false, canExport: false });
   activeId = id; renderTabs(); restoreActive(); editor.focus();
+  saveTabsToStorage();
 };
 
 const closeTab = (id: number): void => {
@@ -352,6 +394,7 @@ const closeTab = (id: number): void => {
   tabs = tabs.filter((t) => t.id !== id);
   if (activeId === id) activeId = tabs[Math.max(0, idx - 1)].id;
   renderTabs(); restoreActive();
+  saveTabsToStorage();
 };
 
 tabsBar.addEventListener('click', (e) => {
@@ -374,10 +417,40 @@ const setView = (v: 'table' | 'chart'): void => {
 viewTableBtn.addEventListener('click', () => setView('table'));
 viewChartBtn.addEventListener('click', () => setView('chart'));
 
-// bootstrap console pertama
-tabs.push({ id: ++tabSeq, name: 'Console 1', sql: '', cols: [], rows: [], meta: '', metaErr: false, canExport: false });
-activeId = tabSeq;
+const loadTabsFromStorage = (): boolean => {
+  try {
+    const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed.tabs) && parsed.tabs.length > 0) {
+        tabs = parsed.tabs.map((t: any) => ({
+          id: t.id,
+          name: t.name || `Console ${t.id}`,
+          sql: t.sql || '',
+          cols: [],
+          rows: [],
+          meta: t.meta || '',
+          metaErr: !!t.metaErr,
+          canExport: !!t.canExport,
+        }));
+        activeId = parsed.activeId || tabs[0].id;
+        tabSeq = parsed.tabSeq || Math.max(...tabs.map(t => t.id));
+        return true;
+      }
+    }
+  } catch (e) {
+    console.error('Failed to load tabs from storage', e);
+  }
+  return false;
+};
+
+// bootstrap console pertama / restore dari storage
+if (!loadTabsFromStorage()) {
+  tabs.push({ id: ++tabSeq, name: 'Console 1', sql: '', cols: [], rows: [], meta: '', metaErr: false, canExport: false });
+  activeId = tabSeq;
+}
 renderTabs();
+restoreActive();
 
 const runQuery = async (): Promise<void> => {
   const sql = editor.getValue().trim();
@@ -404,6 +477,7 @@ const runQuery = async (): Promise<void> => {
     exportBtn.disabled = !t.canExport;
     showActiveResults();
     history.push(sql);
+    saveTabsToStorage();
     // Audit (best-effort; IDB error tidak boleh ganggu UX query). Hanya saat DB aktif.
     if (dbLoaded) void appendAudit({
       ts: Date.now(), dbName: currentDbName, sql, ms,
@@ -417,6 +491,7 @@ const runQuery = async (): Promise<void> => {
     queryMeta.classList.add('error');
     showActiveResults();
     exportBtn.disabled = true;
+    saveTabsToStorage();
     if (dbLoaded) void appendAudit({
       ts: Date.now(), dbName: currentDbName, sql, ms, rowCount: 0, text: '',
       error: (err as Error).message,

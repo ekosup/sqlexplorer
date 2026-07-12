@@ -38,7 +38,7 @@ const sqlHighlightStyle = HighlightStyle.define([
 
 export const mountQueryEditor = (
   parent: HTMLElement,
-  opts: { onRun: () => void; schema?: TableSchema[] },
+  opts: { onRun: () => void; onChange?: (sql: string) => void; schema?: TableSchema[] },
 ): EditorApi => {
   const lang = new Compartment();
   const theme = EditorView.theme({
@@ -72,6 +72,11 @@ export const mountQueryEditor = (
         EditorView.lineWrapping,
         syntaxHighlighting(sqlHighlightStyle),
         theme,
+        EditorView.updateListener.of((update) => {
+          if (update.docChanged && opts.onChange) {
+            opts.onChange(update.state.doc.toString());
+          }
+        }),
       ],
     }),
     parent,
