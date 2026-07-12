@@ -1,4 +1,4 @@
-// Visualisasi hasil query: bar, line, scatter. SVG murni (tanpa lib chart) → bundle kecil, offline.
+// Visualisasi hasil query: bar, line, scatter, pie, donut, area. SVG murni (tanpa lib chart) → bundle kecil, offline.
 const MAX_POINTS = 300;
 
 export type ChartViewApi = {
@@ -6,7 +6,24 @@ export type ChartViewApi = {
   clear: () => void;
 };
 
-type ChartType = 'bar' | 'line' | 'scatter';
+type ChartType = 'bar' | 'line' | 'scatter' | 'pie' | 'donut' | 'area';
+
+export interface ChartRenderContext {
+  width: number;
+  height: number;
+  cols: string[];
+  rows: unknown[][];
+  xi: number;
+  yi: number;
+  formatNum: (v: number) => string;
+  esc: (s: string) => string;
+}
+
+export interface ChartRenderer {
+  id: ChartType;
+  name: string;
+  render: (ctx: ChartRenderContext) => string;
+}
 
 const num = (v: unknown): number | null => {
   if (v == null || v === '') return null;
@@ -54,6 +71,7 @@ const resolveChartSvg = (svgEl: SVGElement): SVGElement => {
     .ch-lbl-x { fill: ${muted}; font-size: 10px; text-anchor: start; }
     .ch-lbl-x-c { fill: ${muted}; font-size: 10px; text-anchor: middle; }
     .ch-title { fill: ${text}; font-size: 12px; text-anchor: middle; font-weight: 600; }
+    .ch-legend-text { fill: ${text}; font-size: 11px; text-anchor: start; }
   `;
   svgClone.insertBefore(styleEl, svgClone.firstChild);
   return svgClone;
@@ -114,6 +132,364 @@ const exportPng = (svgEl: SVGElement, filename: string): void => {
   img.src = url;
 };
 
+// Palet warna premium untuk grafik kategori (Pie/Donut)
+const PALETTE = [
+  '#2563eb', // blue
+  '#10b981', // emerald
+  '#f59e0b', // amber
+  '#ef4444', // red
+  '#8b5cf6', // violet
+  '#06b6d4', // cyan
+  '#ec4899', // pink
+  '#f97316', // orange
+  '#14b8a6', // teal
+  '#a855f7', // purple
+];
+
+// Helper untuk menggambar grafik tipe Cartesian (Bar, Line, Scatter, Area)
+const renderCartesian = (
+  ctx: ChartRenderContext,
+  drawBody: (params: {
+    pad: { l: number; r: number; t: number; b: number };
+    iw: number;
+    ih: number;
+    yScale: (v: number) => number;
+    yMin: number;
+    yMax: number;
+  }) => { body: string; xLabels: string }
+): string => {
+  const { width: W, height: H, cols, rows, xi, yi, formatNum, esc } = ctx;
+  const ys = rows.map((r) => num(r[yi]));
+  const yVals = ys.filter((v): v is number => v != null);
+  if (yVals.length === 0) {
+    return `<text x="${W / 2}" y="${H / 2}" class="ch-title" text-anchor="middle">Kolom Y tidak punya nilai numerik.</text>`;
+  }
+  let yMin = Math.min(0, ...yVals), yMax = Math.max(0, ...yVals);
+  if (yMin === yMax) yMax = yMin + 1;
+
+  // Generate tick labels to compute dynamic left padding
+  const tickLabels = Array.from({ length: 5 }, (_, k) => {
+    const v = yMin + (k / 4) * (yMax - yMin);
+    return formatNum(v);
+  });
+  const maxLabelLen = Math.max(...tickLabels.map(l => l.length));
+  
+  // Estimate required padding: ~6.5px per character + 12px margin + 24px rotated title space
+  const padL = Math.max(56, maxLabelLen * 6.5 + 36);
+  const pad = { l: padL, r: 20, t: 20, b: 64 };
+  const iw = W - pad.l - pad.r, ih = H - pad.t - pad.b;
+
+  const yScale = (v: number): number => pad.t + ih - ((v - yMin) / (yMax - yMin)) * ih;
+
+  const axes = `
+    <line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${pad.t + ih}" class="ch-axis"/>
+    <line x1="${pad.l}" y1="${pad.t + ih}" x2="${pad.l + iw}" y2="${pad.t + ih}" class="ch-axis"/>`;
+  
+  const yTicks = tickLabels.map((lbl, k) => {
+    const v = yMin + (k / 4) * (yMax - yMin), y = yScale(v);
+    return `<line x1="${pad.l - 4}" y1="${y}" x2="${pad.l + iw}" y2="${y}" class="ch-grid"/><text x="${pad.l - 8}" y="${y + 4}" class="ch-lbl-y">${lbl}</text>`;
+  }).join('');
+
+  const { body, xLabels } = drawBody({ pad, iw, ih, yScale, yMin, yMax });
+
+  return `
+    ${yTicks}
+    ${axes}
+    ${body}
+    ${xLabels}
+    <text x="${pad.l + iw / 2}" y="${H - 4}" class="ch-title">${esc(cols[xi] ?? '')}</text>
+    <text transform="rotate(-90 14 ${pad.t + ih / 2})" x="14" y="${pad.t + ih / 2}" class="ch-title">${esc(cols[yi] ?? '')}</text>
+  `;
+};
+
+// Helper untuk menggambar Pie / Donut
+const renderPieDonut = (ctx: ChartRenderContext, isDonut: boolean): string => {
+  const { width: W, height: H, cols, yi, esc, formatNum } = ctx;
+  const cx = 210, cy = H / 2;
+  const rOut = 125;
+  const rIn = 75;
+
+  const dataPairs: { label: string; value: number }[] = ctx.rows
+    .map(r => ({
+      label: String(r[ctx.xi] ?? ''),
+      value: Math.max(0, num(r[ctx.yi]) ?? 0)
+    }))
+    .filter(p => p.value > 0);
+
+  const total = dataPairs.reduce((sum, p) => sum + p.value, 0);
+  if (total === 0) {
+    return `<text x="${W / 2}" y="${H / 2}" class="ch-title" text-anchor="middle">Semua nilai bernilai nol atau kosong.</text>`;
+  }
+
+  // Urutkan menurun agar visualisasi rapi
+  dataPairs.sort((a, b) => b.value - a.value);
+
+  // Group ke "Lainnya" jika kategori terlalu banyak (> 8)
+  let finalPairs: { label: string; value: number }[] = [];
+  if (dataPairs.length > 8) {
+    finalPairs = dataPairs.slice(0, 7);
+    const otherSum = dataPairs.slice(7).reduce((sum, p) => sum + p.value, 0);
+    finalPairs.push({ label: 'Lainnya', value: otherSum });
+  } else {
+    finalPairs = dataPairs;
+  }
+
+  let startAngle = -Math.PI / 2;
+  const slices: string[] = [];
+  const legendItems: string[] = [];
+
+  finalPairs.forEach((p, idx) => {
+    const percent = p.value / total;
+    const angleDelta = percent * 2 * Math.PI;
+    const endAngle = startAngle + angleDelta;
+    const color = PALETTE[idx % PALETTE.length];
+    
+    let pathD = '';
+    if (percent >= 0.9999) {
+      if (isDonut) {
+        pathD = `
+          M ${cx} ${cy - rOut}
+          A ${rOut} ${rOut} 0 1 1 ${cx - 0.01} ${cy - rOut}
+          Z
+          M ${cx} ${cy - rIn}
+          A ${rIn} ${rIn} 0 1 0 ${cx - 0.01} ${cy - rIn}
+          Z
+        `;
+      } else {
+        pathD = `
+          M ${cx} ${cy - rOut}
+          A ${rOut} ${rOut} 0 1 1 ${cx - 0.01} ${cy - rOut}
+          Z
+        `;
+      }
+    } else {
+      if (isDonut) {
+        const x1Out = cx + rOut * Math.cos(startAngle);
+        const y1Out = cy + rOut * Math.sin(startAngle);
+        const x2Out = cx + rOut * Math.cos(endAngle);
+        const y2Out = cy + rOut * Math.sin(endAngle);
+        
+        const x1In = cx + rIn * Math.cos(startAngle);
+        const y1In = cy + rIn * Math.sin(startAngle);
+        const x2In = cx + rIn * Math.cos(endAngle);
+        const y2In = cy + rIn * Math.sin(endAngle);
+        
+        const largeArc = angleDelta > Math.PI ? 1 : 0;
+        pathD = `M ${x1Out} ${y1Out} A ${rOut} ${rOut} 0 ${largeArc} 1 ${x2Out} ${y2Out} L ${x2In} ${y2In} A ${rIn} ${rIn} 0 ${largeArc} 0 ${x1In} ${y1In} Z`;
+      } else {
+        const x1 = cx + rOut * Math.cos(startAngle);
+        const y1 = cy + rOut * Math.sin(startAngle);
+        const x2 = cx + rOut * Math.cos(endAngle);
+        const y2 = cy + rOut * Math.sin(endAngle);
+        
+        const largeArc = angleDelta > Math.PI ? 1 : 0;
+        pathD = `M ${cx} ${cy} L ${x1} ${y1} A ${rOut} ${rOut} 0 ${largeArc} 1 ${x2} ${y2} Z`;
+      }
+    }
+
+    slices.push(`<path d="${pathD.trim()}" fill="${color}" stroke="var(--panel)" stroke-width="1.5" class="ch-slice" />`);
+
+    const pctStr = (percent * 100).toFixed(1) + '%';
+    const labelText = esc(p.label);
+    const displayLabel = labelText.length > 22 ? labelText.slice(0, 20) + '..' : labelText;
+    const legendY = 60 + idx * 30;
+    
+    legendItems.push(`
+      <g transform="translate(400, ${legendY})">
+        <rect x="0" y="0" width="16" height="16" rx="3" fill="${color}" />
+        <text x="24" y="12" class="ch-legend-text" font-size="12px" fill="var(--text)">${displayLabel} (${pctStr})</text>
+      </g>
+    `);
+
+    startAngle = endAngle;
+  });
+
+  let donutCenterLabel = '';
+  if (isDonut) {
+    const totalFormatted = formatNum(total);
+    donutCenterLabel = `
+      <text x="${cx}" y="${cy - 4}" text-anchor="middle" class="ch-title" font-weight="600" font-size="14px" fill="var(--text)">TOTAL</text>
+      <text x="${cx}" y="${cy + 16}" text-anchor="middle" class="ch-lbl-x-c" font-size="12px" fill="var(--muted)">${totalFormatted}</text>
+    `;
+  }
+
+  const chartTitle = `<text x="${W / 2}" y="${25}" class="ch-title" font-size="14px" text-anchor="middle" font-weight="700" fill="var(--text)">Distribusi ${esc(cols[yi])}</text>`;
+
+  return `
+    ${chartTitle}
+    <g class="ch-slices">${slices.join('')}</g>
+    ${donutCenterLabel}
+    <g class="ch-legend">${legendItems.join('')}</g>
+  `;
+};
+
+// Concrete Implementations of ChartRenderer
+const BarChartRenderer: ChartRenderer = {
+  id: 'bar',
+  name: 'Bar',
+  render(ctx) {
+    return renderCartesian(ctx, ({ pad, iw, ih, yScale }) => {
+      const n = ctx.rows.length;
+      const bw = iw / Math.max(1, n);
+      const cx = (k: number): number => pad.l + bw * k + bw / 2;
+
+      const body = ctx.rows.map((r, k) => {
+        const y = num(r[ctx.yi]);
+        if (y == null) return '';
+        const top = yScale(y), base = yScale(0);
+        const bh = Math.abs(base - top);
+        return `<rect x="${cx(k) - Math.min(bw * 0.35, 22)}" y="${Math.min(top, base)}" width="${Math.min(bw * 0.7, 44)}" height="${bh}" class="ch-bar"/>`;
+      }).join('');
+
+      const step = Math.ceil(n / 12);
+      const xLabels = ctx.rows.map((r, k) => 
+        k % step === 0 
+          ? `<text x="${cx(k)}" y="${pad.t + ih + 20}" class="ch-lbl-x" transform="rotate(35 ${cx(k)} ${pad.t + ih + 20})">${ctx.esc(String(r[ctx.xi] ?? '')).slice(0, 14)}</text>` 
+          : ''
+      ).join('');
+
+      return { body, xLabels };
+    });
+  }
+};
+
+const LineChartRenderer: ChartRenderer = {
+  id: 'line',
+  name: 'Line',
+  render(ctx) {
+    return renderCartesian(ctx, ({ pad, iw, ih, yScale }) => {
+      const n = ctx.rows.length;
+      const bw = iw / Math.max(1, n);
+      const cx = (k: number): number => pad.l + bw * k + bw / 2;
+
+      const pts = ctx.rows
+        .map((r, k) => {
+          const y = num(r[ctx.yi]);
+          return y == null ? null : `${cx(k)},${yScale(y)}`;
+        })
+        .filter((val): val is string => val !== null)
+        .join(' ');
+
+      const body = `<polyline points="${pts}" class="ch-line"/>` + 
+        ctx.rows.map((r, k) => {
+          const y = num(r[ctx.yi]);
+          return y == null ? '' : `<circle cx="${cx(k)}" cy="${yScale(y)}" r="3" class="ch-pt"/>`;
+        }).join('');
+
+      const step = Math.ceil(n / 12);
+      const xLabels = ctx.rows.map((r, k) => 
+        k % step === 0 
+          ? `<text x="${cx(k)}" y="${pad.t + ih + 20}" class="ch-lbl-x" transform="rotate(35 ${cx(k)} ${pad.t + ih + 20})">${ctx.esc(String(r[ctx.xi] ?? '')).slice(0, 14)}</text>` 
+          : ''
+      ).join('');
+
+      return { body, xLabels };
+    });
+  }
+};
+
+const ScatterChartRenderer: ChartRenderer = {
+  id: 'scatter',
+  name: 'Scatter',
+  render(ctx) {
+    return renderCartesian(ctx, ({ pad, iw, ih, yScale }) => {
+      const xs = ctx.rows.map((r) => num(r[ctx.xi]));
+      const xVals = xs.filter((v): v is number => v != null);
+      let xMin = Math.min(...xVals), xMax = Math.max(...xVals);
+      if (xMin === xMax) xMax = xMin + 1;
+      const xScale = (v: number): number => pad.l + ((v - xMin) / (xMax - xMin)) * iw;
+
+      const body = ctx.rows.map((r) => {
+        const x = num(r[ctx.xi]), y = num(r[ctx.yi]);
+        return x == null || y == null ? '' : `<circle cx="${xScale(x)}" cy="${yScale(y)}" r="4" class="ch-pt"/>`;
+      }).join('');
+
+      const xLabels = Array.from({ length: 5 }, (_, k) => {
+        const v = xMin + (k / 4) * (xMax - xMin);
+        return `<text x="${xScale(v)}" y="${pad.t + ih + 20}" class="ch-lbl-x-c">${ctx.formatNum(v)}</text>`;
+      }).join('');
+
+      return { body, xLabels };
+    });
+  }
+};
+
+const AreaChartRenderer: ChartRenderer = {
+  id: 'area',
+  name: 'Area',
+  render(ctx) {
+    return renderCartesian(ctx, ({ pad, iw, ih, yScale }) => {
+      const n = ctx.rows.length;
+      const bw = iw / Math.max(1, n);
+      const cx = (k: number): number => pad.l + bw * k + bw / 2;
+
+      // Filter point valid
+      const points = ctx.rows
+        .map((r, k) => {
+          const y = num(r[ctx.yi]);
+          return y == null ? null : { x: cx(k), y: yScale(y) };
+        })
+        .filter((pt): pt is { x: number; y: number } => pt != null);
+
+      if (points.length === 0) return { body: '', xLabels: '' };
+
+      const linePointsStr = points.map(pt => `${pt.x},${pt.y}`).join(' ');
+      const zeroY = yScale(0);
+      const firstX = points[0].x;
+      const lastX = points[points.length - 1].x;
+      const areaPointsStr = `${firstX},${zeroY} ${linePointsStr} ${lastX},${zeroY}`;
+
+      const gradientId = 'ch-area-grad';
+      const body = `
+        <defs>
+          <linearGradient id="${gradientId}" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="var(--accent)" stop-opacity="0.4"/>
+            <stop offset="100%" stop-color="var(--accent)" stop-opacity="0.0"/>
+          </linearGradient>
+        </defs>
+        <polygon points="${areaPointsStr}" fill="url(#${gradientId})" />
+        <polyline points="${linePointsStr}" class="ch-line"/>
+        ${points.map(pt => `<circle cx="${pt.x}" cy="${pt.y}" r="3" class="ch-pt"/>`).join('')}
+      `;
+
+      const step = Math.ceil(n / 12);
+      const xLabels = ctx.rows.map((r, k) => 
+        k % step === 0 
+          ? `<text x="${cx(k)}" y="${pad.t + ih + 20}" class="ch-lbl-x" transform="rotate(35 ${cx(k)} ${pad.t + ih + 20})">${ctx.esc(String(r[ctx.xi] ?? '')).slice(0, 14)}</text>` 
+          : ''
+      ).join('');
+
+      return { body, xLabels };
+    });
+  }
+};
+
+const PieChartRenderer: ChartRenderer = {
+  id: 'pie',
+  name: 'Pie',
+  render(ctx) {
+    return renderPieDonut(ctx, false);
+  }
+};
+
+const DonutChartRenderer: ChartRenderer = {
+  id: 'donut',
+  name: 'Donut',
+  render(ctx) {
+    return renderPieDonut(ctx, true);
+  }
+};
+
+// Map Registry untuk renderers grafik
+const chartRenderers: Record<ChartType, ChartRenderer> = {
+  bar: BarChartRenderer,
+  line: LineChartRenderer,
+  scatter: ScatterChartRenderer,
+  pie: PieChartRenderer,
+  donut: DonutChartRenderer,
+  area: AreaChartRenderer,
+};
+
 export const mountChartView = (host: HTMLElement): ChartViewApi => {
   let cols: string[] = [];
   let rows: unknown[][] = [];
@@ -135,7 +511,7 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
 
   const renderControls = (): string => {
     const numericYs = cols.map((_, i) => i).filter((i) => isNumericCol(rows, i));
-    const yOpts = (type === 'scatter' ? numericYs : numericYs);
+    const yOpts = numericYs;
     const hasData = yi >= 0 && isNumericCol(rows, yi);
 
     const xOptions = [
@@ -150,6 +526,9 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
         ].join('')
       : option('(tak ada kolom numerik)', -1, -1);
 
+    const labelX = (type === 'pie' || type === 'donut') ? 'Kategori (X)' : 'Sumbu X';
+    const labelY = (type === 'pie' || type === 'donut') ? 'Nilai (Y)' : 'Sumbu Y';
+
     return `
       <div class="chart-controls">
         <div class="chart-selectors">
@@ -158,12 +537,15 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
               <option value="bar"${type === 'bar' ? ' selected' : ''}>Bar</option>
               <option value="line"${type === 'line' ? ' selected' : ''}>Line</option>
               <option value="scatter"${type === 'scatter' ? ' selected' : ''}>Scatter</option>
+              <option value="pie"${type === 'pie' ? ' selected' : ''}>Pie</option>
+              <option value="donut"${type === 'donut' ? ' selected' : ''}>Donut</option>
+              <option value="area"${type === 'area' ? ' selected' : ''}>Area</option>
             </select>
           </label>
-          <label>Sumbu X
+          <label>${labelX}
             <select id="ch-x">${xOptions}</select>
           </label>
-          <label>Sumbu Y
+          <label>${labelY}
             <select id="ch-y">${yOptions}</select>
           </label>
         </div>
@@ -189,65 +571,25 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
 
     const src = rows.slice(0, MAX_POINTS);
     const banner = rows.length > MAX_POINTS ? `<div class="muted" style="padding:4px 8px">Menampilkan ${MAX_POINTS} dari ${rows.length} baris.</div>` : '';
-    const ys = src.map((r) => num(r[yi]));
-    const yVals = ys.filter((v): v is number => v != null);
-    if (yVals.length === 0) return '<div class="muted" style="padding:12px">Kolom Y tidak punya nilai numerik.</div>';
-    let yMin = Math.min(0, ...yVals), yMax = Math.max(0, ...yVals);
-    if (yMin === yMax) yMax = yMin + 1;
 
-    // Generate tick labels to compute dynamic left padding
-    const tickLabels = Array.from({ length: 5 }, (_, k) => {
-      const v = yMin + (k / 4) * (yMax - yMin);
-      return formatNum(v);
-    });
-    const maxLabelLen = Math.max(...tickLabels.map(l => l.length));
-    
-    // Estimate required padding: ~6.5px per character + 12px margin + 24px rotated title space
-    const padL = Math.max(56, maxLabelLen * 6.5 + 36);
-    const pad = { l: padL, r: 20, t: 20, b: 64 };
-    const iw = W - pad.l - pad.r, ih = H - pad.t - pad.b;
+    const renderer = chartRenderers[type];
+    if (!renderer) return '<div class="muted" style="padding:12px">Tipe grafik tidak didukung.</div>';
 
-    const yScale = (v: number): number => pad.t + ih - ((v - yMin) / (yMax - yMin)) * ih;
+    const ctx: ChartRenderContext = {
+      width: W,
+      height: H,
+      cols,
+      rows: src,
+      xi,
+      yi,
+      formatNum,
+      esc,
+    };
 
-    const axes = `
-      <line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${pad.t + ih}" class="ch-axis"/>
-      <line x1="${pad.l}" y1="${pad.t + ih}" x2="${pad.l + iw}" y2="${pad.t + ih}" class="ch-axis"/>`;
-    const yTicks = tickLabels.map((lbl, k) => {
-      const v = yMin + (k / 4) * (yMax - yMin), y = yScale(v);
-      return `<line x1="${pad.l - 4}" y1="${y}" x2="${pad.l + iw}" y2="${y}" class="ch-grid"/><text x="${pad.l - 8}" y="${y + 4}" class="ch-lbl-y">${lbl}</text>`;
-    }).join('');
-
-    let body = '';
-    let xLabels = '';
-    if (type === 'scatter') {
-      const xs = src.map((r) => num(r[xi]));
-      const xVals = xs.filter((v): v is number => v != null);
-      let xMin = Math.min(...xVals), xMax = Math.max(...xVals);
-      if (xMin === xMax) xMax = xMin + 1;
-      const xScale = (v: number): number => pad.l + ((v - xMin) / (xMax - xMin)) * iw;
-      body = src.map((r) => { const x = num(r[xi]), y = num(r[yi]); return x == null || y == null ? '' : `<circle cx="${xScale(x)}" cy="${yScale(y)}" r="4" class="ch-pt"/>`; }).join('');
-      xLabels = Array.from({ length: 5 }, (_, k) => {
-        const v = xMin + (k / 4) * (xMax - xMin);
-        return `<text x="${xScale(v)}" y="${pad.t + ih + 20}" class="ch-lbl-x-c">${formatNum(v)}</text>`;
-      }).join('');
-    } else {
-      const n = src.length;
-      const bw = iw / Math.max(1, n);
-      const cx = (k: number): number => pad.l + bw * k + bw / 2;
-      if (type === 'bar') {
-        body = src.map((r, k) => { const y = num(r[yi]); if (y == null) return ''; const top = yScale(y), base = yScale(0); const bh = Math.abs(base - top); return `<rect x="${cx(k) - Math.min(bw * 0.35, 22)}" y="${Math.min(top, base)}" width="${Math.min(bw * 0.7, 44)}" height="${bh}" class="ch-bar"/>`; }).join('');
-      } else {
-        const pts = src.map((r, k) => { const y = num(r[yi]); return y == null ? null : `${cx(k)},${yScale(y)}`; }).filter(Boolean).join(' ');
-        body = `<polyline points="${pts}" class="ch-line"/>` + src.map((r, k) => { const y = num(r[yi]); return y == null ? '' : `<circle cx="${cx(k)}" cy="${yScale(y)}" r="3" class="ch-pt"/>`; }).join('');
-      }
-      const step = Math.ceil(n / 12);
-      xLabels = src.map((r, k) => k % step === 0 ? `<text x="${cx(k)}" y="${pad.t + ih + 20}" class="ch-lbl-x" transform="rotate(35 ${cx(k)} ${pad.t + ih + 20})">${esc(String(r[xi] ?? '')).slice(0, 14)}</text>` : '').join('');
-    }
+    const innerSvg = renderer.render(ctx);
 
     return banner + `<svg viewBox="0 0 ${W} ${H}" class="chart-svg" preserveAspectRatio="xMidYMid meet">
-      ${yTicks}${axes}${body}${xLabels}
-      <text x="${pad.l + iw / 2}" y="${H - 4}" class="ch-title">${esc(cols[xi] ?? '')}</text>
-      <text transform="rotate(-90 14 ${pad.t + ih / 2})" x="14" y="${pad.t + ih / 2}" class="ch-title">${esc(cols[yi] ?? '')}</text>
+      ${innerSvg}
     </svg>`;
   };
 
