@@ -1130,6 +1130,10 @@ table.result tr:hover td {
 .view-btn.active { color: var(--text); background: var(--editor-bg); border-color: var(--accent); font-weight: 600; }
 .view-btn:hover:not(.active) { background: var(--table-hover); }
 
+[hidden] {
+  display: none !important;
+}
+
 /* ===== Chart view ===== */
 .chart-slot {
   display: flex;

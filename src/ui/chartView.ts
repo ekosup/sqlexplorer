@@ -121,7 +121,14 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
   let xi = 0;
   let yi = 1;
 
-  const clear = (): void => { host.innerHTML = ''; cols = []; rows = []; };
+  const clear = (): void => {
+    host.innerHTML = '<div class="muted" style="padding:12px">Tidak ada data untuk divisualisasikan.</div>';
+    cols = [];
+    rows = [];
+    type = 'bar';
+    xi = -1;
+    yi = -1;
+  };
 
   const option = (label: string, i: number, sel: number): string =>
     `<option value="${i}"${i === sel ? ' selected' : ''}>${esc(label)}</option>`;
@@ -130,6 +137,19 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
     const numericYs = cols.map((_, i) => i).filter((i) => isNumericCol(rows, i));
     const yOpts = (type === 'scatter' ? numericYs : numericYs);
     const hasData = yi >= 0 && isNumericCol(rows, yi);
+
+    const xOptions = [
+      `<option value="-1"${xi === -1 ? ' selected' : ''}>-- Pilih Kolom X --</option>`,
+      ...cols.map((c, i) => option(c, i, xi))
+    ].join('');
+
+    const yOptions = yOpts.length > 0
+      ? [
+          `<option value="-1"${yi === -1 ? ' selected' : ''}>-- Pilih Kolom Y --</option>`,
+          ...yOpts.map((i) => option(cols[i], i, yi))
+        ].join('')
+      : option('(tak ada kolom numerik)', -1, -1);
+
     return `
       <div class="chart-controls">
         <div class="chart-selectors">
@@ -141,14 +161,17 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
             </select>
           </label>
           <label>Sumbu X
-            <select id="ch-x">${cols.map((c, i) => option(c, i, xi)).join('')}</select>
+            <select id="ch-x">${xOptions}</select>
           </label>
           <label>Sumbu Y
-            <select id="ch-y">${yOpts.map((i) => option(cols[i], i, yi)).join('') || option('(tak ada kolom numerik)', -1, -1)}</select>
+            <select id="ch-y">${yOptions}</select>
           </label>
         </div>
         ${hasData ? `
         <div class="chart-export-actions">
+          <button id="btn-clear-chart" type="button" class="btn-secondary" title="Clear Cache Grafik" style="color: var(--danger)">
+            <i class="ti ti-trash"></i> Clear Cache
+          </button>
           <button id="btn-export-png" type="button" class="btn-secondary" title="Export ke PNG">
             <i class="ti ti-photo"></i> Export PNG
           </button>
@@ -234,6 +257,15 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
     host.querySelector<HTMLSelectElement>('#ch-x')!.addEventListener('change', (e) => { xi = Number((e.target as HTMLSelectElement).value); paint(); });
     const ySel = host.querySelector<HTMLSelectElement>('#ch-y')!;
     ySel.addEventListener('change', (e) => { yi = Number((e.target as HTMLSelectElement).value); paint(); });
+
+    const btnClear = host.querySelector<HTMLButtonElement>('#btn-clear-chart');
+    if (btnClear) {
+      btnClear.addEventListener('click', () => {
+        xi = -1;
+        yi = -1;
+        paint();
+      });
+    }
 
     const btnPng = host.querySelector<HTMLButtonElement>('#btn-export-png');
     if (btnPng) {

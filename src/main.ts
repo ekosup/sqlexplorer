@@ -17,6 +17,7 @@ import '@tabler/icons-webfont/dist/tabler-icons.min.css';
 import { runStabilityTest, STABILITY_COUNT, type StabilityReport } from './stability/harness';
 import { appendAudit, toTsv } from './db/audit';
 import { mountAuditPanel } from './ui/auditPanel';
+import { mountSaveQueryPanel } from './ui/saveQueryPanel';
 
 const engine = new SqlEngine();
 
@@ -30,6 +31,7 @@ const dbStatus = $('db-status');
 const editorSlot = $('query-editor');
 const runBtn = $('run-query') as HTMLButtonElement;
 const exportBtn = $('export-csv') as HTMLButtonElement;
+const saveQueryBtn = $('save-query') as HTMLButtonElement;
 const queryMeta = $('query-meta');
 
 const editor = mountQueryEditor(editorSlot, { onRun: () => void runQuery() });
@@ -117,6 +119,16 @@ const auditPanel = mountAuditPanel($('audit-overlay'));
 $('btn-audit').addEventListener('click', () => void auditPanel.open());
 $('btn-reference').addEventListener('click', () => void referencePanel.open());
 $('learn-reference-launch').addEventListener('click', () => void referencePanel.open());
+
+const saveQueryPanel = mountSaveQueryPanel($('save-query-overlay'));
+saveQueryBtn.addEventListener('click', () => {
+  const sql = editor.getValue().trim();
+  if (!sql) {
+    alert('Query kosong. Tulis query terlebih dahulu sebelum menyimpan.');
+    return;
+  }
+  saveQueryPanel.open(sql);
+});
 
 // Import Excel/CSV → SQLite. DB tetap di worker; setelah import refresh schema + persist.
 const importPanel = mountImportPanel($('import-overlay'), {
