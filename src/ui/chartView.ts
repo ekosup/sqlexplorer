@@ -6,7 +6,7 @@ export type ChartViewApi = {
   clear: () => void;
 };
 
-type ChartType = 'bar' | 'line' | 'scatter' | 'pie' | 'donut' | 'area';
+type ChartType = 'bar' | 'line' | 'scatter' | 'pie' | 'donut' | 'area' | 'heatmap';
 
 export interface ChartRenderContext {
   width: number;
@@ -15,6 +15,7 @@ export interface ChartRenderContext {
   rows: unknown[][];
   xi: number;
   yi: number;
+  zi?: number;
   formatNum: (v: number) => string;
   esc: (s: string) => string;
 }
@@ -480,6 +481,143 @@ const DonutChartRenderer: ChartRenderer = {
   }
 };
 
+const HeatmapChartRenderer: ChartRenderer = {
+  id: 'heatmap',
+  name: 'Heatmap',
+  render(ctx) {
+    const { width: W, height: H, cols, rows, xi, yi, formatNum, esc } = ctx;
+    const zi = ctx.zi ?? 2;
+
+    const xVals = Array.from(new Set(rows.map(r => String(r[xi] ?? ''))));
+    const yVals = Array.from(new Set(rows.map(r => String(r[yi] ?? ''))));
+
+    if (xVals.length === 0 || yVals.length === 0) {
+      return `<text x="${W / 2}" y="${H / 2}" class="ch-title" text-anchor="middle">Data tidak cukup untuk heatmap.</text>`;
+    }
+
+    const sortAlphanumeric = (arr: string[]): string[] => {
+      return [...arr].sort((a, b) => {
+        const aNum = Number(a), bNum = Number(b);
+        if (Number.isFinite(aNum) && Number.isFinite(bNum)) {
+          return aNum - bNum;
+        }
+        return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+      });
+    };
+
+    const sortedX = sortAlphanumeric(xVals);
+    const sortedY = sortAlphanumeric(yVals);
+
+    const gridX = sortedX.slice(0, 30);
+    const gridY = sortedY.slice(0, 20);
+
+    const cellMap: Record<string, number> = {};
+    rows.forEach(r => {
+      const x = String(r[xi] ?? '');
+      const y = String(r[yi] ?? '');
+      const zVal = num(r[zi]) ?? 0;
+      const key = `${x}|||${y}`;
+      cellMap[key] = (cellMap[key] || 0) + zVal;
+    });
+
+    const zVals = Object.values(cellMap);
+    if (zVals.length === 0) {
+      return `<text x="${W / 2}" y="${H / 2}" class="ch-title" text-anchor="middle">Kolom Z tidak memiliki nilai numerik.</text>`;
+    }
+
+    let zMin = Math.min(...zVals);
+    let zMax = Math.max(...zVals);
+    if (zMin === zMax) zMax = zMin + 1;
+
+    const pad = { l: 110, r: 90, t: 40, b: 65 };
+    const iw = W - pad.l - pad.r;
+    const ih = H - pad.t - pad.b;
+
+    const cw = iw / gridX.length;
+    const ch = ih / gridY.length;
+
+    const cells: string[] = [];
+    gridY.forEach((y, rIdx) => {
+      gridX.forEach((x, cIdx) => {
+        const key = `${x}|||${y}`;
+        const hasVal = key in cellMap;
+        const val = cellMap[key] ?? 0;
+        const px = pad.l + cIdx * cw;
+        const py = pad.t + rIdx * ch;
+
+        let fill = 'var(--border)';
+        let opacity = 0.1;
+        let titleText = `${esc(x)}, ${esc(y)}: no data`;
+
+        if (hasVal) {
+          const pct = (val - zMin) / (zMax - zMin);
+          fill = 'var(--accent)';
+          opacity = 0.15 + pct * 0.85;
+          titleText = `${esc(x)}, ${esc(y)}: ${formatNum(val)}`;
+        }
+
+        cells.push(`
+          <rect x="${px + 0.5}" y="${py + 0.5}" width="${cw - 1}" height="${ch - 1}" fill="${fill}" fill-opacity="${opacity}" rx="2" class="ch-cell">
+            <title>${titleText}</title>
+          </rect>
+        `);
+      });
+    });
+
+    // Draw Y labels (left)
+    const yLabels = gridY.map((y, rIdx) => {
+      const py = pad.t + rIdx * ch + ch / 2 + 3;
+      const displayY = y.length > 15 ? y.slice(0, 13) + '..' : y;
+      return `<text x="${pad.l - 8}" y="${py}" class="ch-lbl-y" font-size="9px">${esc(displayY)}</text>`;
+    }).join('');
+
+    // Draw X labels (bottom)
+    const xStep = Math.ceil(gridX.length / 15);
+    const xLabels = gridX.map((x, cIdx) => {
+      if (cIdx % xStep !== 0) return '';
+      const px = pad.l + cIdx * cw + cw / 2;
+      const py = pad.t + ih + 12;
+      const displayX = x.length > 12 ? x.slice(0, 10) + '..' : x;
+      return `<text x="${px}" y="${py}" class="ch-lbl-x-c" font-size="9px" transform="rotate(25 ${px} ${py})">${esc(displayX)}</text>`;
+    }).join('');
+
+    // Draw legend
+    const legendX = W - pad.r + 25;
+    const legendY = pad.t;
+    const legendW = 15;
+    const legendH = ih;
+    const gradientId = 'ch-heatmap-grad';
+
+    const legendSvg = `
+      <defs>
+        <linearGradient id="${gradientId}" x1="0" y1="1" x2="0" y2="0">
+          <stop offset="0%" stop-color="var(--accent)" stop-opacity="0.15"/>
+          <stop offset="100%" stop-color="var(--accent)" stop-opacity="1.0"/>
+        </linearGradient>
+      </defs>
+      <rect x="${legendX}" y="${legendY}" width="${legendW}" height="${legendH}" fill="url(#${gradientId})" rx="2" />
+      <text x="${legendX + legendW + 6}" y="${legendY + 8}" class="ch-lbl-y" font-size="9px" text-anchor="start">${formatNum(zMax)}</text>
+      <text x="${legendX + legendW + 6}" y="${legendY + legendH - 2}" class="ch-lbl-y" font-size="9px" text-anchor="start">${formatNum(zMin)}</text>
+      <text transform="rotate(90 ${legendX + legendW + 35} ${legendY + legendH / 2})" x="${legendX + legendW + 35}" y="${legendY + legendH / 2}" class="ch-title" font-size="10px" text-anchor="middle">${esc(cols[zi] ?? 'Nilai')}</text>
+    `;
+
+    const chartTitle = `<text x="${W / 2}" y="${22}" class="ch-title" font-size="13px" font-weight="700">${esc(cols[xi])} vs ${esc(cols[yi])} (${esc(cols[zi])})</text>`;
+
+    const truncationNote = (sortedX.length > 30 || sortedY.length > 20)
+      ? `<text x="${pad.l}" y="${H - 4}" class="ch-lbl-x" font-size="8px" fill="var(--muted)">* Menampilkan ${Math.min(30, sortedX.length)}x${Math.min(20, sortedY.length)} kategori pertama</text>`
+      : '';
+
+    return `
+      ${chartTitle}
+      <g class="ch-grid-cells">${cells.join('')}</g>
+      <g class="ch-y-labels">${yLabels}</g>
+      <g class="ch-x-labels">${xLabels}</g>
+      ${legendSvg}
+      ${truncationNote}
+    `;
+  }
+};
+
 // Map Registry untuk renderers grafik
 const chartRenderers: Record<ChartType, ChartRenderer> = {
   bar: BarChartRenderer,
@@ -488,6 +626,7 @@ const chartRenderers: Record<ChartType, ChartRenderer> = {
   pie: PieChartRenderer,
   donut: DonutChartRenderer,
   area: AreaChartRenderer,
+  heatmap: HeatmapChartRenderer,
 };
 
 export const mountChartView = (host: HTMLElement): ChartViewApi => {
@@ -496,6 +635,7 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
   let type: ChartType = 'bar';
   let xi = 0;
   let yi = 1;
+  let zi = 2;
 
   const clear = (): void => {
     host.innerHTML = '<div class="muted" style="padding:12px">Tidak ada data untuk divisualisasikan.</div>';
@@ -504,6 +644,7 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
     type = 'bar';
     xi = -1;
     yi = -1;
+    zi = -1;
   };
 
   const option = (label: string, i: number, sel: number): string =>
@@ -511,23 +652,46 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
 
   const renderControls = (): string => {
     const numericYs = cols.map((_, i) => i).filter((i) => isNumericCol(rows, i));
-    const yOpts = numericYs;
-    const hasData = yi >= 0 && isNumericCol(rows, yi);
 
     const xOptions = [
       `<option value="-1"${xi === -1 ? ' selected' : ''}>-- Pilih Kolom X --</option>`,
       ...cols.map((c, i) => option(c, i, xi))
     ].join('');
 
-    const yOptions = yOpts.length > 0
-      ? [
-          `<option value="-1"${yi === -1 ? ' selected' : ''}>-- Pilih Kolom Y --</option>`,
-          ...yOpts.map((i) => option(cols[i], i, yi))
-        ].join('')
-      : option('(tak ada kolom numerik)', -1, -1);
+    let yOptions = '';
+    if (type === 'heatmap') {
+      yOptions = [
+        `<option value="-1"${yi === -1 ? ' selected' : ''}>-- Pilih Kolom Y --</option>`,
+        ...cols.map((c, i) => option(c, i, yi))
+      ].join('');
+    } else {
+      yOptions = numericYs.length > 0
+        ? [
+            `<option value="-1"${yi === -1 ? ' selected' : ''}>-- Pilih Kolom Y --</option>`,
+            ...numericYs.map((i) => option(cols[i], i, yi))
+          ].join('')
+        : option('(tak ada kolom numerik)', -1, -1);
+    }
 
-    const labelX = (type === 'pie' || type === 'donut') ? 'Kategori (X)' : 'Sumbu X';
-    const labelY = (type === 'pie' || type === 'donut') ? 'Nilai (Y)' : 'Sumbu Y';
+    const zSelector = type === 'heatmap'
+      ? `<label>Nilai (Z)
+          <select id="ch-z">
+            <option value="-1"${zi === -1 ? ' selected' : ''}>-- Pilih Kolom Z --</option>
+            ${numericYs.map((i) => option(cols[i], i, zi)).join('')}
+          </select>
+        </label>`
+      : '';
+
+    const labelX = (type === 'pie' || type === 'donut') 
+      ? 'Kategori (X)' 
+      : (type === 'heatmap' ? 'Kolom X (Horizontal)' : 'Sumbu X');
+    const labelY = (type === 'pie' || type === 'donut') 
+      ? 'Nilai (Y)' 
+      : (type === 'heatmap' ? 'Kolom Y (Vertikal)' : 'Sumbu Y');
+
+    const hasData = type === 'heatmap'
+      ? xi >= 0 && yi >= 0 && zi >= 0 && isNumericCol(rows, zi)
+      : yi >= 0 && isNumericCol(rows, yi);
 
     return `
       <div class="chart-controls">
@@ -540,6 +704,7 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
               <option value="pie"${type === 'pie' ? ' selected' : ''}>Pie</option>
               <option value="donut"${type === 'donut' ? ' selected' : ''}>Donut</option>
               <option value="area"${type === 'area' ? ' selected' : ''}>Area</option>
+              <option value="heatmap"${type === 'heatmap' ? ' selected' : ''}>Heatmap</option>
             </select>
           </label>
           <label>${labelX}
@@ -548,6 +713,7 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
           <label>${labelY}
             <select id="ch-y">${yOptions}</select>
           </label>
+          ${zSelector}
         </div>
         ${hasData ? `
         <div class="chart-export-actions">
@@ -567,7 +733,15 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
 
   const draw = (): string => {
     const W = 720, H = 380;
-    if (yi < 0 || !isNumericCol(rows, yi)) return '<div class="muted" style="padding:12px">Pilih kolom Y numerik untuk membuat grafik.</div>';
+    if (type === 'heatmap') {
+      if (xi < 0 || yi < 0 || zi < 0 || !isNumericCol(rows, zi)) {
+        return '<div class="muted" style="padding:12px">Pilih kolom X, Y, dan kolom Z numerik untuk membuat heatmap.</div>';
+      }
+    } else {
+      if (yi < 0 || !isNumericCol(rows, yi)) {
+        return '<div class="muted" style="padding:12px">Pilih kolom Y numerik untuk membuat grafik.</div>';
+      }
+    }
 
     const src = rows.slice(0, MAX_POINTS);
     const banner = rows.length > MAX_POINTS ? `<div class="muted" style="padding:4px 8px">Menampilkan ${MAX_POINTS} dari ${rows.length} baris.</div>` : '';
@@ -582,6 +756,7 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
       rows: src,
       xi,
       yi,
+      zi,
       formatNum,
       esc,
     };
@@ -595,16 +770,42 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
 
   const paint = (): void => {
     host.innerHTML = renderControls() + `<div class="chart-canvas">${draw()}</div>`;
-    host.querySelector<HTMLSelectElement>('#ch-type')!.addEventListener('change', (e) => { type = (e.target as HTMLSelectElement).value as ChartType; paint(); });
+    
+    host.querySelector<HTMLSelectElement>('#ch-type')!.addEventListener('change', (e) => {
+      const newType = (e.target as HTMLSelectElement).value as ChartType;
+      type = newType;
+      
+      const numeric = cols.map((_, i) => i).filter((i) => isNumericCol(rows, i));
+      if (type === 'heatmap') {
+        if (zi < 0 || !isNumericCol(rows, zi)) {
+          zi = numeric[0] ?? -1;
+        }
+        if (xi === yi && cols.length > 1) {
+          yi = (xi + 1) % cols.length;
+        }
+      } else {
+        if (yi < 0 || !isNumericCol(rows, yi)) {
+          yi = numeric[0] ?? -1;
+        }
+      }
+      paint();
+    });
+
     host.querySelector<HTMLSelectElement>('#ch-x')!.addEventListener('change', (e) => { xi = Number((e.target as HTMLSelectElement).value); paint(); });
     const ySel = host.querySelector<HTMLSelectElement>('#ch-y')!;
     ySel.addEventListener('change', (e) => { yi = Number((e.target as HTMLSelectElement).value); paint(); });
+
+    const zSel = host.querySelector<HTMLSelectElement>('#ch-z');
+    if (zSel) {
+      zSel.addEventListener('change', (e) => { zi = Number((e.target as HTMLSelectElement).value); paint(); });
+    }
 
     const btnClear = host.querySelector<HTMLButtonElement>('#btn-clear-chart');
     if (btnClear) {
       btnClear.addEventListener('click', () => {
         xi = -1;
         yi = -1;
+        zi = -1;
         paint();
       });
     }
@@ -635,11 +836,17 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
   const render = (c: string[], r: unknown[][]): void => {
     cols = c; rows = r;
     if (cols.length === 0 || rows.length === 0) { host.innerHTML = '<div class="muted" style="padding:12px">Tidak ada data untuk divisualisasikan.</div>'; return; }
-    // default X = kolom non-numerik pertama, Y = kolom numerik pertama
+    
     const numeric = cols.map((_, i) => i).filter((i) => isNumericCol(rows, i));
     yi = numeric[0] ?? 1;
     xi = cols.findIndex((_, i) => !isNumericCol(rows, i));
     if (xi < 0) xi = 0;
+
+    if (numeric.length > 0) {
+      zi = numeric.find(idx => idx !== yi && idx !== xi) ?? numeric[0];
+    } else {
+      zi = -1;
+    }
     paint();
   };
 

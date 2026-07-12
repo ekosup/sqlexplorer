@@ -254,7 +254,7 @@ html, body { height: 100%; margin: 0; background: var(--bg); overflow: hidden; t
   flex-direction: column;
 }
 
-.panel-learning {
+.panel-history {
   width: 340px;
   flex-shrink: 0;
 }
@@ -284,7 +284,7 @@ html, body { height: 100%; margin: 0; background: var(--bg); overflow: hidden; t
 
 .panel.collapsed .panel-title,
 .panel.collapsed .panel-content-wrapper,
-.panel.collapsed .learning-scroll {
+.panel.collapsed .history-scroll {
   display: none;
 }
 
@@ -471,12 +471,26 @@ html, body { height: 100%; margin: 0; background: var(--bg); overflow: hidden; t
 
 .panel-body { padding: 12px; overflow: auto; flex: 1; min-height: 0; }
 
-.panel-learning .learning-scroll {
+.panel-history .history-scroll {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
+}
+
+/* Learning Card Modal Styles */
+.learning-card {
+  max-width: 680px;
+  width: 100%;
+}
+.learning-card .learning-scroll {
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  max-height: 70vh;
 }
 
 .learn-section { border-bottom: 1px solid var(--border); }
@@ -668,7 +682,7 @@ html, body { height: 100%; margin: 0; background: var(--bg); overflow: hidden; t
 
 /* Maximized Editor State */
 .maximized-editor .panel-schema,
-.maximized-editor .panel-learning,
+.maximized-editor .panel-history,
 .maximized-editor .result-toolbar,
 .maximized-editor #result-grid,
 .maximized-editor #chart-view,
@@ -682,7 +696,7 @@ html, body { height: 100%; margin: 0; background: var(--bg); overflow: hidden; t
 
 /* Maximized Results State */
 .maximized-results .panel-schema,
-.maximized-results .panel-learning,
+.maximized-results .panel-history,
 .maximized-results .panel-title,
 .maximized-results #editor-tabs,
 .maximized-results #query-editor,
@@ -1440,4 +1454,38 @@ table.result tr:hover td {
   border-top: 1px solid var(--border);
   background: var(--panel-header);
   border-radius: 0 0 8px 8px;
+}
+
+/* ===== Responsive Navbar & App Shell ===== */
+@media (max-width: 768px) {
+  .app-header {
+    padding: 8px 12px;
+  }
+  .brand h1 {
+    display: none;
+  }
+  .header-right {
+    gap: 6px;
+  }
+  .app-header .ghost-btn span,
+  .app-header .network-status span,
+  .app-header .db-status span,
+  .editor-actions button span,
+  .result-view-toggle button span {
+    display: none;
+  }
+  .network-status, .db-status {
+    padding: 6px;
+    border-radius: 6px;
+  }
+  .ghost-btn,
+  .editor-actions button,
+  .result-view-toggle button {
+    padding: 6px;
+  }
+  .app-shell {
+    gap: 8px;
+    padding: 8px;
+    height: calc(100vh - 49px);
+  }
 }

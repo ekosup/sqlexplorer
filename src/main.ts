@@ -28,6 +28,15 @@ const $ = (id: string): HTMLElement => {
 };
 
 const dbStatus = $('db-status');
+const updateDbStatus = (text: string, statusClass?: 'ok' | 'error' | '') => {
+  const textEl = dbStatus.querySelector('span');
+  if (textEl) textEl.textContent = text;
+  dbStatus.title = text;
+  dbStatus.classList.remove('ok', 'error');
+  if (statusClass) {
+    dbStatus.classList.add(statusClass);
+  }
+};
 const editorSlot = $('query-editor');
 const runBtn = $('run-query') as HTMLButtonElement;
 const exportBtn = $('export-csv') as HTMLButtonElement;
@@ -161,7 +170,28 @@ const history = mountHistoryPanel($('history-panel'), { onPick: setEditor });
 const auditPanel = mountAuditPanel($('audit-overlay'));
 $('btn-audit').addEventListener('click', () => void auditPanel.open());
 $('btn-reference').addEventListener('click', () => void referencePanel.open());
-$('learn-reference-launch').addEventListener('click', () => void referencePanel.open());
+
+const learningOverlay = $('learning-overlay');
+$('btn-learning').addEventListener('click', () => {
+  learningOverlay.hidden = false;
+});
+$('learning-close').addEventListener('click', () => {
+  learningOverlay.hidden = true;
+});
+learningOverlay.addEventListener('click', (e) => {
+  if (e.target === learningOverlay) {
+    learningOverlay.hidden = true;
+  }
+});
+$('learn-reference-launch').addEventListener('click', () => {
+  learningOverlay.hidden = true;
+  void referencePanel.open();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !learningOverlay.hidden) {
+    learningOverlay.hidden = true;
+  }
+});
 
 const saveQueryPanel = mountSaveQueryPanel($('save-query-overlay'));
 saveQueryBtn.addEventListener('click', () => {
@@ -186,8 +216,7 @@ const importPanel = mountImportPanel($('import-overlay'), {
     if (btnStability) btnStability.disabled = false;
     // Persist hasil import agar selamat dari refresh.
     const bytes = await engine.exportDb();
-    dbStatus.textContent = `${currentDbName} · ${(bytes.byteLength / 1024).toFixed(1)} KB`;
-    dbStatus.classList.remove('error'); dbStatus.classList.add('ok');
+    updateDbStatus(`${currentDbName} · ${(bytes.byteLength / 1024).toFixed(1)} KB`, 'ok');
     await saveDb(currentDbName, new Uint8Array(bytes).buffer);
     localStorage.setItem('sqlexplorer_has_saved_db', 'true');
   },
@@ -209,15 +238,30 @@ btnExpandSchema.addEventListener('click', () => {
   panelSchema.classList.remove('collapsed');
 });
 
-const panelLearning = $('panel-learning');
-const btnCollapseLearning = $('btn-collapse-learning');
-const btnExpandLearning = $('btn-expand-learning');
+const panelHistory = $('panel-history');
+const btnCollapseHistory = $('btn-collapse-history');
+const btnExpandHistory = $('btn-expand-history');
 
-btnCollapseLearning.addEventListener('click', () => {
-  panelLearning.classList.add('collapsed');
+btnCollapseHistory.addEventListener('click', () => {
+  panelHistory.classList.add('collapsed');
 });
-btnExpandLearning.addEventListener('click', () => {
-  panelLearning.classList.remove('collapsed');
+btnExpandHistory.addEventListener('click', () => {
+  panelHistory.classList.remove('collapsed');
+});
+
+// Collapse Schema & History sidebars on narrow screens
+let isNarrow = window.innerWidth <= 768;
+if (isNarrow) {
+  panelSchema.classList.add('collapsed');
+  panelHistory.classList.add('collapsed');
+}
+window.addEventListener('resize', () => {
+  const narrow = window.innerWidth <= 768;
+  if (narrow && !isNarrow) {
+    panelSchema.classList.add('collapsed');
+    panelHistory.classList.add('collapsed');
+  }
+  isNarrow = narrow;
 });
 
 // Theme toggle logic (Default: Light Mode)
@@ -302,12 +346,10 @@ let currentDbName = '';
 // Dipakai ulang oleh upload baru maupun restore saat startup.
 // Function declaration agar hoisted; semua const/let di bawah sudah ter-init sebelum dipanggil.
 async function loadDbBytes(name: string, bytes: Uint8Array): Promise<void> {
-  dbStatus.textContent = `Memuat ${name}…`;
-  dbStatus.classList.remove('error', 'ok');
+  updateDbStatus(`Memuat ${name}…`);
   try {
     await engine.loadDb(bytes);
-    dbStatus.textContent = `${name} · ${(bytes.byteLength / 1024).toFixed(1)} KB`;
-    dbStatus.classList.add('ok');
+    updateDbStatus(`${name} · ${(bytes.byteLength / 1024).toFixed(1)} KB`, 'ok');
     caseStudy.setLoadedDbName(name);
     currentDbName = name;
     const schema = await engine.getSchema();
@@ -317,8 +359,7 @@ async function loadDbBytes(name: string, bytes: Uint8Array): Promise<void> {
     dbLoaded = true;
     if (btnStability) btnStability.disabled = false;
   } catch (err) {
-    dbStatus.textContent = `Gagal memuat: ${(err as Error).message}`;
-    dbStatus.classList.add('error');
+    updateDbStatus(`Gagal memuat: ${(err as Error).message}`, 'error');
     throw err;
   }
 }

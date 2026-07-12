@@ -18,13 +18,16 @@
           <i class="ti ti-test-pipe"></i> Uji Stabilitas
         </button> -->
         <button id="btn-import" class="ghost-btn" type="button" title="Import data dari Excel/CSV ke SQLite">
-          <i class="ti ti-file-spreadsheet"></i> Import Excel
+          <i class="ti ti-file-spreadsheet"></i> <span>Import Excel</span>
+        </button>
+        <button id="btn-learning" class="ghost-btn" type="button" title="Materi pembelajaran, explain query, & studi kasus">
+          <i class="ti ti-school"></i> <span>Learning</span>
         </button>
         <button id="btn-audit" class="ghost-btn" type="button" title="Lihat & export audit log hasil query">
-          <i class="ti ti-clipboard-list"></i> Riwayat
+          <i class="ti ti-clipboard-list"></i> <span>Riwayat</span>
         </button>
         <button id="btn-reference" class="ghost-btn" type="button" title="Buka glosarium & FAQ SQL">
-          <i class="ti ti-book-2"></i> Referensi
+          <i class="ti ti-book-2"></i> <span>Referensi</span>
         </button>
         <button id="btn-theme-toggle" class="theme-toggle-btn" title="Toggle Theme" type="button">
           <!-- Sun Icon (default for Light Mode) -->
@@ -36,7 +39,7 @@
           <i class="ti ti-wifi"></i>
           <span>Online</span>
         </div>
-        <div id="db-status" class="db-status">
+        <div id="db-status" class="db-status" title="Status Database">
           <i class="ti ti-database"></i>
           <span>Belum ada database dimuat</span>
         </div>
@@ -79,17 +82,17 @@
         <div id="query-editor" class="panel-body editor-slot"></div>
         <div class="editor-actions">
           <div class="actions-left">
-            <button id="run-query" type="button" class="btn-primary">
+            <button id="run-query" type="button" class="btn-primary" title="Jalankan query (⌘/Ctrl+Enter)">
               <i class="ti ti-player-play"></i>
-              Run <kbd>⌘/Ctrl+Enter</kbd>
+              <span>Run <kbd>⌘/Ctrl+Enter</kbd></span>
             </button>
-            <button id="export-csv" type="button" class="btn-secondary" disabled>
+            <button id="export-csv" type="button" class="btn-secondary" disabled title="Export ke CSV">
               <i class="ti ti-download"></i>
-              Export CSV
+              <span>Export CSV</span>
             </button>
             <button id="save-query" type="button" class="btn-secondary" title="Simpan query aktif ke file SQL">
               <i class="ti ti-device-floppy"></i>
-              Simpan Query
+              <span>Simpan Query</span>
             </button>
           </div>
           <span id="query-meta" class="query-meta"></span>
@@ -97,8 +100,8 @@
         <div id="editor-resize-handle" class="resize-handle-horizontal"></div>
         <div class="result-toolbar">
           <div class="result-view-toggle">
-            <button id="view-table" type="button" class="view-btn active" title="Tampilkan tabel"><i class="ti ti-table"></i> Tabel</button>
-            <button id="view-chart" type="button" class="view-btn" title="Visualisasikan hasil"><i class="ti ti-chart-bar"></i> Grafik</button>
+            <button id="view-table" type="button" class="view-btn active" title="Tampilkan tabel"><i class="ti ti-table"></i> <span>Tabel</span></button>
+            <button id="view-chart" type="button" class="view-btn" title="Visualisasikan hasil"><i class="ti ti-chart-bar"></i> <span>Grafik</span></button>
           </div>
           <button id="btn-maximize-results" class="panel-toggle-btn" title="Maximize/Restore Results" type="button">
             <i id="results-maximize-icon" class="ti ti-maximize"></i>
@@ -108,39 +111,20 @@
         <div id="chart-view" class="panel-body chart-slot" hidden></div>
       </section>
 
-      <aside class="panel panel-learning" id="panel-learning" aria-label="Learning">
+      <aside class="panel panel-history" id="panel-history" aria-label="History">
         <div class="panel-title">
-          <span>Learning</span>
-          <button id="btn-collapse-learning" class="panel-toggle-btn" title="Collapse Learning">
+          <span>History</span>
+          <button id="btn-collapse-history" class="panel-toggle-btn" title="Collapse History">
             <i class="ti ti-chevron-right"></i>
           </button>
         </div>
-        <div class="panel-collapsed-view" id="btn-expand-learning" title="Expand Learning">
+        <div class="panel-collapsed-view" id="btn-expand-history" title="Expand History">
           <button class="panel-toggle-btn">
             <i class="ti ti-chevron-left"></i>
           </button>
-          <span class="vertical-text">LEARNING</span>
+          <span class="vertical-text">HISTORY</span>
         </div>
-        <div class="learning-scroll">
-          <section class="learn-section">
-            <div class="subpanel-title">Explain</div>
-            <div id="explain-panel" class="panel-body learn-body"></div>
-          </section>
-          <section class="learn-section">
-            <div id="case-study-panel" class="panel-body learn-body"></div>
-          </section>
-          <section class="learn-section">
-            <div id="starter-query-panel" class="panel-body learn-body"></div>
-          </section>
-          <section class="learn-section">
-            <div class="subpanel-title">Referensi Cepat</div>
-            <div class="panel-body learn-body">
-              <button id="learn-reference-launch" class="starter-btn" type="button">
-                <i class="ti ti-book-2"></i>
-                <span>Buka Glosarium & FAQ</span>
-              </button>
-            </div>
-          </section>
+        <div class="history-scroll">
           <section class="learn-section">
             <div id="history-panel" class="panel-body learn-body"></div>
           </section>
@@ -178,6 +162,36 @@
     <div id="import-overlay" class="test-overlay" hidden></div>
 
     <div id="save-query-overlay" class="test-overlay" hidden></div>
+
+    <div id="learning-overlay" class="test-overlay" hidden>
+      <div class="test-overlay-card learning-card">
+        <div class="test-overlay-head">
+          <b><i class="ti ti-school"></i> Learning Panel</b>
+          <button id="learning-close" type="button" class="link-btn">Tutup</button>
+        </div>
+        <div class="learning-scroll">
+          <section class="learn-section">
+            <div class="subpanel-title">Explain</div>
+            <div id="explain-panel" class="panel-body learn-body"></div>
+          </section>
+          <section class="learn-section">
+            <div id="case-study-panel" class="panel-body learn-body"></div>
+          </section>
+          <section class="learn-section">
+            <div id="starter-query-panel" class="panel-body learn-body"></div>
+          </section>
+          <section class="learn-section">
+            <div class="subpanel-title">Referensi Cepat</div>
+            <div class="panel-body learn-body">
+              <button id="learn-reference-launch" class="starter-btn" type="button">
+                <i class="ti ti-book-2"></i>
+                <span>Buka Glosarium & FAQ</span>
+              </button>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
 
     <div id="reference-overlay" class="test-overlay" hidden>
       <div class="reference-overlay-card">
