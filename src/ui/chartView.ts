@@ -7,6 +7,7 @@ export type ChartViewApi = {
 };
 
 type ChartType = 'bar' | 'line' | 'scatter' | 'pie' | 'donut' | 'area' | 'heatmap' | 'stackedbar' | 'combo';
+type LegendPosition = 'inside-right' | 'outside-right' | 'top' | 'bottom';
 
 export interface ChartRenderContext {
   width: number;
@@ -16,6 +17,10 @@ export interface ChartRenderContext {
   xi: number;
   yi: number;
   zi?: number;
+  showAllXLabels: boolean;
+  legendPosition: LegendPosition;
+  legendOffsetX: number;
+  legendOffsetY: number;
   formatNum: (v: number) => string;
   esc: (s: string) => string;
 }
@@ -147,6 +152,52 @@ const PALETTE = [
   '#a855f7', // purple
 ];
 
+const buildCategoryXLabels = (params: {
+  rows: unknown[][];
+  xi: number;
+  esc: (s: string) => string;
+  cx: (k: number) => number;
+  y: number;
+  showAllXLabels: boolean;
+  maxShown?: number;
+  maxLen?: number;
+}): string => {
+  const { rows, xi, esc, cx, y, showAllXLabels, maxShown = 12, maxLen = 14 } = params;
+  const n = rows.length;
+  const step = showAllXLabels ? 1 : Math.ceil(n / maxShown);
+  const angle = showAllXLabels ? 55 : 35;
+  const fontSize = showAllXLabels ? 8 : 10;
+  return rows.map((r, k) =>
+    k % step === 0
+      ? `<text x="${cx(k)}" y="${y}" class="ch-lbl-x" font-size="${fontSize}px" transform="rotate(${angle} ${cx(k)} ${y})">${esc(String(r[xi] ?? '')).slice(0, maxLen)}</text>`
+      : ''
+  ).join('');
+};
+
+const resolveLegendAnchor = (
+  W: number,
+  H: number,
+  legendPosition: LegendPosition,
+  defaults: { x: number; y: number },
+  legendOffsetX: number,
+  legendOffsetY: number,
+  itemCount = 0,
+): { x: number; y: number } => {
+  const approxLegendHeight = Math.max(28, itemCount * 22);
+  let x = defaults.x;
+  let y = defaults.y;
+  if (legendPosition === 'top') {
+    x = 20;
+    y = 34;
+  } else if (legendPosition === 'bottom') {
+    x = 20;
+    y = H - approxLegendHeight - 8;
+  } else if (legendPosition === 'outside-right') {
+    x = Math.max(defaults.x, W - 190);
+  }
+  return { x: x + legendOffsetX, y: y + legendOffsetY };
+};
+
 // Helper untuk menggambar grafik tipe Cartesian (Bar, Line, Scatter, Area)
 const renderCartesian = (
   ctx: ChartRenderContext,
@@ -177,7 +228,7 @@ const renderCartesian = (
   
   // Estimate required padding: ~6.5px per character + 12px margin + 24px rotated title space
   const padL = Math.max(56, maxLabelLen * 6.5 + 36);
-  const pad = { l: padL, r: 20, t: 20, b: 64 };
+  const pad = { l: padL, r: 20, t: 20, b: ctx.showAllXLabels ? 88 : 64 };
   const iw = W - pad.l - pad.r, ih = H - pad.t - pad.b;
 
   const yScale = (v: number): number => pad.t + ih - ((v - yMin) / (yMax - yMin)) * ih;
@@ -293,12 +344,12 @@ const renderPieDonut = (ctx: ChartRenderContext, isDonut: boolean): string => {
     const pctStr = (percent * 100).toFixed(1) + '%';
     const labelText = esc(p.label);
     const displayLabel = labelText.length > 22 ? labelText.slice(0, 20) + '..' : labelText;
-    const legendY = 60 + idx * 30;
-    
+    const legendY = idx * 24;
+
     legendItems.push(`
-      <g transform="translate(400, ${legendY})">
-        <rect x="0" y="0" width="16" height="16" rx="3" fill="${color}" />
-        <text x="24" y="12" class="ch-legend-text" font-size="12px" fill="var(--text)">${displayLabel} (${pctStr})</text>
+      <g transform="translate(0, ${legendY})">
+        <rect x="0" y="0" width="14" height="14" rx="3" fill="${color}" />
+        <text x="20" y="11" class="ch-legend-text" font-size="11px" fill="var(--text)">${displayLabel} (${pctStr})</text>
       </g>
     `);
 
@@ -315,12 +366,21 @@ const renderPieDonut = (ctx: ChartRenderContext, isDonut: boolean): string => {
   }
 
   const chartTitle = `<text x="${W / 2}" y="${25}" class="ch-title" font-size="14px" text-anchor="middle" font-weight="700" fill="var(--text)">Distribusi ${esc(cols[yi])}</text>`;
+  const legendAnchor = resolveLegendAnchor(
+    W,
+    H,
+    ctx.legendPosition,
+    { x: 400, y: 60 },
+    ctx.legendOffsetX,
+    ctx.legendOffsetY,
+    legendItems.length,
+  );
 
   return `
     ${chartTitle}
     <g class="ch-slices">${slices.join('')}</g>
     ${donutCenterLabel}
-    <g class="ch-legend">${legendItems.join('')}</g>
+    <g class="ch-legend" transform="translate(${legendAnchor.x}, ${legendAnchor.y})">${legendItems.join('')}</g>
   `;
 };
 
@@ -342,12 +402,14 @@ const BarChartRenderer: ChartRenderer = {
         return `<rect x="${cx(k) - Math.min(bw * 0.35, 22)}" y="${Math.min(top, base)}" width="${Math.min(bw * 0.7, 44)}" height="${bh}" class="ch-bar"/>`;
       }).join('');
 
-      const step = Math.ceil(n / 12);
-      const xLabels = ctx.rows.map((r, k) => 
-        k % step === 0 
-          ? `<text x="${cx(k)}" y="${pad.t + ih + 20}" class="ch-lbl-x" transform="rotate(35 ${cx(k)} ${pad.t + ih + 20})">${ctx.esc(String(r[ctx.xi] ?? '')).slice(0, 14)}</text>` 
-          : ''
-      ).join('');
+      const xLabels = buildCategoryXLabels({
+        rows: ctx.rows,
+        xi: ctx.xi,
+        esc: ctx.esc,
+        cx,
+        y: pad.t + ih + 20,
+        showAllXLabels: ctx.showAllXLabels,
+      });
 
       return { body, xLabels };
     });
@@ -377,12 +439,14 @@ const LineChartRenderer: ChartRenderer = {
           return y == null ? '' : `<circle cx="${cx(k)}" cy="${yScale(y)}" r="3" class="ch-pt"/>`;
         }).join('');
 
-      const step = Math.ceil(n / 12);
-      const xLabels = ctx.rows.map((r, k) => 
-        k % step === 0 
-          ? `<text x="${cx(k)}" y="${pad.t + ih + 20}" class="ch-lbl-x" transform="rotate(35 ${cx(k)} ${pad.t + ih + 20})">${ctx.esc(String(r[ctx.xi] ?? '')).slice(0, 14)}</text>` 
-          : ''
-      ).join('');
+      const xLabels = buildCategoryXLabels({
+        rows: ctx.rows,
+        xi: ctx.xi,
+        esc: ctx.esc,
+        cx,
+        y: pad.t + ih + 20,
+        showAllXLabels: ctx.showAllXLabels,
+      });
 
       return { body, xLabels };
     });
@@ -453,12 +517,14 @@ const AreaChartRenderer: ChartRenderer = {
         ${points.map(pt => `<circle cx="${pt.x}" cy="${pt.y}" r="3" class="ch-pt"/>`).join('')}
       `;
 
-      const step = Math.ceil(n / 12);
-      const xLabels = ctx.rows.map((r, k) => 
-        k % step === 0 
-          ? `<text x="${cx(k)}" y="${pad.t + ih + 20}" class="ch-lbl-x" transform="rotate(35 ${cx(k)} ${pad.t + ih + 20})">${ctx.esc(String(r[ctx.xi] ?? '')).slice(0, 14)}</text>` 
-          : ''
-      ).join('');
+      const xLabels = buildCategoryXLabels({
+        rows: ctx.rows,
+        xi: ctx.xi,
+        esc: ctx.esc,
+        cx,
+        y: pad.t + ih + 20,
+        showAllXLabels: ctx.showAllXLabels,
+      });
 
       return { body, xLabels };
     });
@@ -529,7 +595,7 @@ const HeatmapChartRenderer: ChartRenderer = {
     let zMax = Math.max(...zVals);
     if (zMin === zMax) zMax = zMin + 1;
 
-    const pad = { l: 110, r: 90, t: 40, b: 65 };
+    const pad = { l: 110, r: 90, t: 40, b: ctx.showAllXLabels ? 86 : 65 };
     const iw = W - pad.l - pad.r;
     const ih = H - pad.t - pad.b;
 
@@ -572,21 +638,30 @@ const HeatmapChartRenderer: ChartRenderer = {
     }).join('');
 
     // Draw X labels (bottom)
-    const xStep = Math.ceil(gridX.length / 15);
+    const xStep = ctx.showAllXLabels ? 1 : Math.ceil(gridX.length / 15);
+    const xAngle = ctx.showAllXLabels ? 45 : 25;
+    const xFont = ctx.showAllXLabels ? 8 : 9;
     const xLabels = gridX.map((x, cIdx) => {
       if (cIdx % xStep !== 0) return '';
       const px = pad.l + cIdx * cw + cw / 2;
       const py = pad.t + ih + 12;
       const displayX = x.length > 12 ? x.slice(0, 10) + '..' : x;
-      return `<text x="${px}" y="${py}" class="ch-lbl-x-c" font-size="9px" transform="rotate(25 ${px} ${py})">${esc(displayX)}</text>`;
+      return `<text x="${px}" y="${py}" class="ch-lbl-x-c" font-size="${xFont}px" transform="rotate(${xAngle} ${px} ${py})">${esc(displayX)}</text>`;
     }).join('');
 
     // Draw legend
-    const legendX = W - pad.r + 25;
-    const legendY = pad.t;
     const legendW = 15;
     const legendH = ih;
     const gradientId = 'ch-heatmap-grad';
+    const legendAnchor = resolveLegendAnchor(
+      W,
+      H,
+      ctx.legendPosition,
+      { x: W - pad.r + 25, y: pad.t },
+      ctx.legendOffsetX,
+      ctx.legendOffsetY,
+      4,
+    );
 
     const legendSvg = `
       <defs>
@@ -595,10 +670,12 @@ const HeatmapChartRenderer: ChartRenderer = {
           <stop offset="100%" stop-color="var(--accent)" stop-opacity="1.0"/>
         </linearGradient>
       </defs>
-      <rect x="${legendX}" y="${legendY}" width="${legendW}" height="${legendH}" fill="url(#${gradientId})" rx="2" />
-      <text x="${legendX + legendW + 6}" y="${legendY + 8}" class="ch-lbl-y" font-size="9px" text-anchor="start">${formatNum(zMax)}</text>
-      <text x="${legendX + legendW + 6}" y="${legendY + legendH - 2}" class="ch-lbl-y" font-size="9px" text-anchor="start">${formatNum(zMin)}</text>
-      <text transform="rotate(90 ${legendX + legendW + 35} ${legendY + legendH / 2})" x="${legendX + legendW + 35}" y="${legendY + legendH / 2}" class="ch-title" font-size="10px" text-anchor="middle">${esc(cols[zi] ?? 'Nilai')}</text>
+      <g transform="translate(${legendAnchor.x}, ${legendAnchor.y})">
+        <rect x="0" y="0" width="${legendW}" height="${legendH}" fill="url(#${gradientId})" rx="2" />
+        <text x="${legendW + 6}" y="8" class="ch-lbl-y" font-size="9px" text-anchor="start">${formatNum(zMax)}</text>
+        <text x="${legendW + 6}" y="${legendH - 2}" class="ch-lbl-y" font-size="9px" text-anchor="start">${formatNum(zMin)}</text>
+        <text transform="rotate(90 ${legendW + 35} ${legendH / 2})" x="${legendW + 35}" y="${legendH / 2}" class="ch-title" font-size="10px" text-anchor="middle">${esc(cols[zi] ?? 'Nilai')}</text>
+      </g>
     `;
 
     const chartTitle = `<text x="${W / 2}" y="${22}" class="ch-title" font-size="13px" font-weight="700">${esc(cols[xi])} vs ${esc(cols[yi])} (${esc(cols[zi])})</text>`;
@@ -634,7 +711,7 @@ const StackedBarChartRenderer: ChartRenderer = {
     const yMax = Math.max(1, ...rowMax);
 
     const ticks = Array.from({ length: 5 }, (_, k) => formatNum((k / 4) * yMax));
-    const pad = { l: Math.max(56, Math.max(...ticks.map((t) => t.length)) * 6.5 + 36), r: 170, t: 20, b: 64 };
+    const pad = { l: Math.max(56, Math.max(...ticks.map((t) => t.length)) * 6.5 + 36), r: 170, t: 20, b: ctx.showAllXLabels ? 88 : 64 };
     const iw = W - pad.l - pad.r, ih = H - pad.t - pad.b;
     const yScale = (v: number): number => pad.t + ih - (v / yMax) * ih;
 
@@ -661,26 +738,36 @@ const StackedBarChartRenderer: ChartRenderer = {
     }).join('');
     const axes = `<line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${pad.t + ih}" class="ch-axis"/><line x1="${pad.l}" y1="${pad.t + ih}" x2="${pad.l + iw}" y2="${pad.t + ih}" class="ch-axis"/>`;
 
-    const step = Math.ceil(n / 12);
-    const xLabels = rows.map((r, k) =>
-      k % step === 0
-        ? `<text x="${cx(k)}" y="${pad.t + ih + 20}" class="ch-lbl-x" transform="rotate(35 ${cx(k)} ${pad.t + ih + 20})">${esc(String(r[xi] ?? '')).slice(0, 14)}</text>`
-        : ''
-    ).join('');
+    const xLabels = buildCategoryXLabels({
+      rows,
+      xi,
+      esc,
+      cx,
+      y: pad.t + ih + 20,
+      showAllXLabels: ctx.showAllXLabels,
+    });
 
-    const legendX = pad.l + iw + 16;
     const shown = seriesIdx.slice(0, 10);
+    const legendAnchor = resolveLegendAnchor(
+      W,
+      H,
+      ctx.legendPosition,
+      { x: pad.l + iw + 16, y: 30 },
+      ctx.legendOffsetX,
+      ctx.legendOffsetY,
+      shown.length + (seriesIdx.length > shown.length ? 1 : 0),
+    );
     const legend = shown.map((si, sIdx) => {
-      const ly = 30 + sIdx * 22;
-      return `<rect x="${legendX}" y="${ly}" width="12" height="12" rx="2" fill="${PALETTE[sIdx % PALETTE.length]}"/><text x="${legendX + 18}" y="${ly + 10}" class="ch-legend-text" font-size="10px">${esc(cols[si]).slice(0, 18)}</text>`;
-    }).join('') + (seriesIdx.length > shown.length ? `<text x="${legendX}" y="${30 + shown.length * 22 + 6}" class="ch-legend-text" font-size="10px" fill="var(--muted)">+${seriesIdx.length - shown.length}</text>` : '');
+      const ly = sIdx * 22;
+      return `<rect x="0" y="${ly}" width="12" height="12" rx="2" fill="${PALETTE[sIdx % PALETTE.length]}"/><text x="18" y="${ly + 10}" class="ch-legend-text" font-size="10px">${esc(cols[si]).slice(0, 18)}</text>`;
+    }).join('') + (seriesIdx.length > shown.length ? `<text x="0" y="${shown.length * 22 + 6}" class="ch-legend-text" font-size="10px" fill="var(--muted)">+${seriesIdx.length - shown.length}</text>` : '');
 
     return `
       ${yTicks}
       ${axes}
       <g class="ch-bars">${segments.join('')}</g>
       ${xLabels}
-      <g class="ch-legend">${legend}</g>
+      <g class="ch-legend" transform="translate(${legendAnchor.x}, ${legendAnchor.y})">${legend}</g>
       <text x="${pad.l + iw / 2}" y="${H - 4}" class="ch-title">${esc(cols[xi] ?? '')}</text>
     `;
   }
@@ -711,7 +798,7 @@ const ComboChartRenderer: ChartRenderer = {
     const pad = {
       l: Math.max(56, Math.max(...barTicks.map((t) => t.length)) * 6.5 + 36),
       r: Math.max(56, Math.max(...lineTicks.map((t) => t.length)) * 6.5 + 36),
-      t: 20, b: 64,
+      t: 20, b: ctx.showAllXLabels ? 88 : 64,
     };
     const iw = W - pad.l - pad.r, ih = H - pad.t - pad.b;
     const barScale = (v: number): number => pad.t + ih - ((v - barMin) / (barMax - barMin)) * ih;
@@ -751,19 +838,30 @@ const ComboChartRenderer: ChartRenderer = {
     }).join('');
     const axes = `<line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${pad.t + ih}" class="ch-axis"/><line x1="${pad.l + iw}" y1="${pad.t}" x2="${pad.l + iw}" y2="${pad.t + ih}" class="ch-axis"/><line x1="${pad.l}" y1="${pad.t + ih}" x2="${pad.l + iw}" y2="${pad.t + ih}" class="ch-axis"/>`;
 
-    const step = Math.ceil(n / 12);
-    const xLabels = rows.map((r, k) =>
-      k % step === 0
-        ? `<text x="${cx(k)}" y="${pad.t + ih + 20}" class="ch-lbl-x" transform="rotate(35 ${cx(k)} ${pad.t + ih + 20})">${esc(String(r[xi] ?? '')).slice(0, 14)}</text>`
-        : ''
-    ).join('');
+    const xLabels = buildCategoryXLabels({
+      rows,
+      xi,
+      esc,
+      cx,
+      y: pad.t + ih + 20,
+      showAllXLabels: ctx.showAllXLabels,
+    });
 
+    const legendAnchor = resolveLegendAnchor(
+      W,
+      H,
+      ctx.legendPosition,
+      { x: pad.l + 8, y: pad.t - 6 },
+      ctx.legendOffsetX,
+      ctx.legendOffsetY,
+      1,
+    );
     const legend = `
-      <rect x="${pad.l + 8}" y="${pad.t - 6}" width="12" height="12" rx="2" fill="${barColor}" opacity="0.55"/>
-      <text x="${pad.l + 26}" y="${pad.t + 4}" class="ch-legend-text" font-size="10px">${esc(cols[yi]).slice(0, 16)}</text>
-      <line x1="${pad.l + 120}" y1="${pad.t}" x2="${pad.l + 140}" y2="${pad.t}" stroke="${lineColor}" stroke-width="2"/>
-      <circle cx="${pad.l + 130}" cy="${pad.t}" r="3" fill="${lineColor}"/>
-      <text x="${pad.l + 146}" y="${pad.t + 4}" class="ch-legend-text" font-size="10px">${esc(cols[zi]).slice(0, 16)}</text>
+      <rect x="0" y="0" width="12" height="12" rx="2" fill="${barColor}" opacity="0.55"/>
+      <text x="18" y="10" class="ch-legend-text" font-size="10px">${esc(cols[yi]).slice(0, 16)}</text>
+      <line x1="108" y1="6" x2="128" y2="6" stroke="${lineColor}" stroke-width="2"/>
+      <circle cx="118" cy="6" r="3" fill="${lineColor}"/>
+      <text x="134" y="10" class="ch-legend-text" font-size="10px">${esc(cols[zi]).slice(0, 16)}</text>
     `;
 
     return `
@@ -774,7 +872,7 @@ const ComboChartRenderer: ChartRenderer = {
       ${linePath}
       ${lineDots}
       ${xLabels}
-      ${legend}
+      <g class="ch-legend" transform="translate(${legendAnchor.x}, ${legendAnchor.y})">${legend}</g>
       <text x="${pad.l + iw / 2}" y="${H - 4}" class="ch-title">${esc(cols[xi] ?? '')}</text>
     `;
   }
@@ -800,6 +898,10 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
   let xi = 0;
   let yi = 1;
   let zi = 2;
+  let showAllXLabels = false;
+  let legendPosition: LegendPosition = 'outside-right';
+  let legendOffsetX = 0;
+  let legendOffsetY = 0;
 
   const clear = (): void => {
     host.innerHTML = '<div class="muted" style="padding:12px">Tidak ada data untuk divisualisasikan.</div>';
@@ -809,6 +911,10 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
     xi = -1;
     yi = -1;
     zi = -1;
+    showAllXLabels = false;
+    legendPosition = 'outside-right';
+    legendOffsetX = 0;
+    legendOffsetY = 0;
   };
 
   const option = (label: string, i: number, sel: number): string =>
@@ -852,6 +958,8 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
     const labelY = (type === 'pie' || type === 'donut') 
       ? 'Nilai (Y)' 
       : (type === 'heatmap' ? 'Kolom Y (Vertikal)' : (type === 'combo' ? 'Batang (Y₁)' : 'Sumbu Y'));
+    const supportsDenseXLabels = type !== 'pie' && type !== 'donut' && type !== 'scatter';
+    const supportsLegendOptions = type === 'pie' || type === 'donut' || type === 'stackedbar' || type === 'combo' || type === 'heatmap';
 
     const hasData = type === 'heatmap'
       ? xi >= 0 && yi >= 0 && zi >= 0 && isNumericCol(rows, zi)
@@ -886,6 +994,23 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
             <select id="ch-y">${yOptions}</select>
           </label>`}
           ${zSelector}
+          ${supportsDenseXLabels ? `<label class="muted" style="align-self:center;font-size:11px;display:flex;gap:6px;align-items:center">
+            <input id="ch-all-x" type="checkbox" ${showAllXLabels ? 'checked' : ''} /> Semua label X (kecil)
+          </label>` : ''}
+          ${supportsLegendOptions ? `<label>Posisi Legend
+            <select id="ch-legend-pos">
+              <option value="outside-right"${legendPosition === 'outside-right' ? ' selected' : ''}>Outside Right</option>
+              <option value="inside-right"${legendPosition === 'inside-right' ? ' selected' : ''}>Inside Right</option>
+              <option value="top"${legendPosition === 'top' ? ' selected' : ''}>Top</option>
+              <option value="bottom"${legendPosition === 'bottom' ? ' selected' : ''}>Bottom</option>
+            </select>
+          </label>
+          <label>Offset X
+            <input id="ch-legend-offset-x" type="number" value="${legendOffsetX}" style="width:72px" />
+          </label>
+          <label>Offset Y
+            <input id="ch-legend-offset-y" type="number" value="${legendOffsetY}" style="width:72px" />
+          </label>` : ''}
         </div>
         ${hasData ? `
         <div class="chart-export-actions">
@@ -937,6 +1062,10 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
       xi,
       yi,
       zi,
+      showAllXLabels,
+      legendPosition,
+      legendOffsetX,
+      legendOffsetY,
       formatNum,
       esc,
     };
@@ -983,12 +1112,48 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
       zSel.addEventListener('change', (e) => { zi = Number((e.target as HTMLSelectElement).value); paint(); });
     }
 
+    const allXToggle = host.querySelector<HTMLInputElement>('#ch-all-x');
+    if (allXToggle) {
+      allXToggle.addEventListener('change', (e) => {
+        showAllXLabels = (e.target as HTMLInputElement).checked;
+        paint();
+      });
+    }
+
+    const legendPosSel = host.querySelector<HTMLSelectElement>('#ch-legend-pos');
+    if (legendPosSel) {
+      legendPosSel.addEventListener('change', (e) => {
+        legendPosition = (e.target as HTMLSelectElement).value as LegendPosition;
+        paint();
+      });
+    }
+
+    const legendOffsetXInput = host.querySelector<HTMLInputElement>('#ch-legend-offset-x');
+    if (legendOffsetXInput) {
+      legendOffsetXInput.addEventListener('change', (e) => {
+        legendOffsetX = Number((e.target as HTMLInputElement).value) || 0;
+        paint();
+      });
+    }
+
+    const legendOffsetYInput = host.querySelector<HTMLInputElement>('#ch-legend-offset-y');
+    if (legendOffsetYInput) {
+      legendOffsetYInput.addEventListener('change', (e) => {
+        legendOffsetY = Number((e.target as HTMLInputElement).value) || 0;
+        paint();
+      });
+    }
+
     const btnClear = host.querySelector<HTMLButtonElement>('#btn-clear-chart');
     if (btnClear) {
       btnClear.addEventListener('click', () => {
         xi = -1;
         yi = -1;
         zi = -1;
+        showAllXLabels = false;
+        legendPosition = 'outside-right';
+        legendOffsetX = 0;
+        legendOffsetY = 0;
         paint();
       });
     }
