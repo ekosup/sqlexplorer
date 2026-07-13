@@ -6,7 +6,7 @@ export type ChartViewApi = {
   clear: () => void;
 };
 
-type ChartType = 'bar' | 'line' | 'scatter' | 'pie' | 'donut' | 'area' | 'heatmap';
+type ChartType = 'bar' | 'line' | 'scatter' | 'pie' | 'donut' | 'area' | 'heatmap' | 'stackedbar' | 'combo';
 
 export interface ChartRenderContext {
   width: number;
@@ -618,6 +618,168 @@ const HeatmapChartRenderer: ChartRenderer = {
   }
 };
 
+// ponytail: stacked bar clamp negatif ke 0; diverging stack (positif/negatif split baseline) tambah kalau data punya negatif bermakna.
+const StackedBarChartRenderer: ChartRenderer = {
+  id: 'stackedbar',
+  name: 'Stacked Bar',
+  render(ctx) {
+    const { width: W, height: H, cols, rows, xi, formatNum, esc } = ctx;
+    // Semua kolom numerik selain X → jadi series yang ditumpuk
+    const seriesIdx = cols.map((_, i) => i).filter((i) => i !== xi && isNumericCol(rows, i));
+    if (seriesIdx.length === 0) {
+      return `<text x="${W / 2}" y="${H / 2}" class="ch-title" text-anchor="middle">Tidak ada kolom numerik (selain X) untuk ditumpuk.</text>`;
+    }
+
+    const rowMax = rows.map((r) => seriesIdx.reduce((s, i) => s + Math.max(0, num(r[i]) ?? 0), 0));
+    const yMax = Math.max(1, ...rowMax);
+
+    const ticks = Array.from({ length: 5 }, (_, k) => formatNum((k / 4) * yMax));
+    const pad = { l: Math.max(56, Math.max(...ticks.map((t) => t.length)) * 6.5 + 36), r: 170, t: 20, b: 64 };
+    const iw = W - pad.l - pad.r, ih = H - pad.t - pad.b;
+    const yScale = (v: number): number => pad.t + ih - (v / yMax) * ih;
+
+    const n = rows.length;
+    const bw = iw / Math.max(1, n);
+    const cx = (k: number): number => pad.l + bw * k + bw / 2;
+    const barW = Math.min(bw * 0.7, 44);
+
+    const segments: string[] = [];
+    rows.forEach((r, k) => {
+      let acc = 0;
+      seriesIdx.forEach((si, sIdx) => {
+        const v = Math.max(0, num(r[si]) ?? 0);
+        if (v === 0) return;
+        const yBot = yScale(acc), yTop = yScale(acc + v);
+        acc += v;
+        segments.push(`<rect x="${cx(k) - barW / 2}" y="${yTop}" width="${barW}" height="${Math.max(0, yBot - yTop)}" fill="${PALETTE[sIdx % PALETTE.length]}" opacity="0.88"><title>${esc(cols[si])}: ${formatNum(v)}</title></rect>`);
+      });
+    });
+
+    const yTicks = ticks.map((lbl, k) => {
+      const y = yScale((k / 4) * yMax);
+      return `<line x1="${pad.l - 4}" y1="${y}" x2="${pad.l + iw}" y2="${y}" class="ch-grid"/><text x="${pad.l - 8}" y="${y + 4}" class="ch-lbl-y">${lbl}</text>`;
+    }).join('');
+    const axes = `<line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${pad.t + ih}" class="ch-axis"/><line x1="${pad.l}" y1="${pad.t + ih}" x2="${pad.l + iw}" y2="${pad.t + ih}" class="ch-axis"/>`;
+
+    const step = Math.ceil(n / 12);
+    const xLabels = rows.map((r, k) =>
+      k % step === 0
+        ? `<text x="${cx(k)}" y="${pad.t + ih + 20}" class="ch-lbl-x" transform="rotate(35 ${cx(k)} ${pad.t + ih + 20})">${esc(String(r[xi] ?? '')).slice(0, 14)}</text>`
+        : ''
+    ).join('');
+
+    const legendX = pad.l + iw + 16;
+    const shown = seriesIdx.slice(0, 10);
+    const legend = shown.map((si, sIdx) => {
+      const ly = 30 + sIdx * 22;
+      return `<rect x="${legendX}" y="${ly}" width="12" height="12" rx="2" fill="${PALETTE[sIdx % PALETTE.length]}"/><text x="${legendX + 18}" y="${ly + 10}" class="ch-legend-text" font-size="10px">${esc(cols[si]).slice(0, 18)}</text>`;
+    }).join('') + (seriesIdx.length > shown.length ? `<text x="${legendX}" y="${30 + shown.length * 22 + 6}" class="ch-legend-text" font-size="10px" fill="var(--muted)">+${seriesIdx.length - shown.length}</text>` : '');
+
+    return `
+      ${yTicks}
+      ${axes}
+      <g class="ch-bars">${segments.join('')}</g>
+      ${xLabels}
+      <g class="ch-legend">${legend}</g>
+      <text x="${pad.l + iw / 2}" y="${H - 4}" class="ch-title">${esc(cols[xi] ?? '')}</text>
+    `;
+  }
+};
+
+// Combo: batang (Y1, axis kiri) + garis (Y2, axis kanan). Dual-axis karena dua series biasanya beda skala.
+const ComboChartRenderer: ChartRenderer = {
+  id: 'combo',
+  name: 'Combo (Bar+Line)',
+  render(ctx) {
+    const { width: W, height: H, cols, rows, xi, yi, formatNum, esc } = ctx;
+    const zi = ctx.zi ?? yi;
+
+    const barVals = rows.map((r) => num(r[yi])).filter((v): v is number => v != null);
+    const lineVals = rows.map((r) => num(r[zi])).filter((v): v is number => v != null);
+    if (barVals.length === 0 || lineVals.length === 0) {
+      return `<text x="${W / 2}" y="${H / 2}" class="ch-title" text-anchor="middle">Kolom Y₁ dan Y₂ harus numerik.</text>`;
+    }
+
+    let barMin = Math.min(0, ...barVals), barMax = Math.max(0, ...barVals);
+    if (barMin === barMax) barMax = barMin + 1;
+    let lineMin = Math.min(0, ...lineVals), lineMax = Math.max(0, ...lineVals);
+    if (lineMin === lineMax) lineMax = lineMin + 1;
+
+    const barTicks = Array.from({ length: 5 }, (_, k) => formatNum(barMin + (k / 4) * (barMax - barMin)));
+    const lineTicks = Array.from({ length: 5 }, (_, k) => formatNum(lineMin + (k / 4) * (lineMax - lineMin)));
+
+    const pad = {
+      l: Math.max(56, Math.max(...barTicks.map((t) => t.length)) * 6.5 + 36),
+      r: Math.max(56, Math.max(...lineTicks.map((t) => t.length)) * 6.5 + 36),
+      t: 20, b: 64,
+    };
+    const iw = W - pad.l - pad.r, ih = H - pad.t - pad.b;
+    const barScale = (v: number): number => pad.t + ih - ((v - barMin) / (barMax - barMin)) * ih;
+    const lineScale = (v: number): number => pad.t + ih - ((v - lineMin) / (lineMax - lineMin)) * ih;
+
+    const n = rows.length;
+    const bw = iw / Math.max(1, n);
+    const cx = (k: number): number => pad.l + bw * k + bw / 2;
+    const barW = Math.min(bw * 0.6, 40);
+    const barColor = 'var(--accent)';
+    const lineColor = PALETTE[1];
+
+    const bars = rows.map((r, k) => {
+      const y = num(r[yi]);
+      if (y == null) return '';
+      const top = barScale(y), base = barScale(0);
+      return `<rect x="${cx(k) - barW / 2}" y="${Math.min(top, base)}" width="${barW}" height="${Math.abs(base - top)}" fill="${barColor}" opacity="0.55"><title>${esc(cols[yi])}: ${formatNum(y)}</title></rect>`;
+    }).join('');
+
+    const linePts = rows.map((r, k) => {
+      const y = num(r[zi]);
+      return y == null ? null : `${cx(k)},${lineScale(y)}`;
+    }).filter((p): p is string => p != null);
+    const linePath = `<polyline points="${linePts.join(' ')}" fill="none" stroke="${lineColor}" stroke-width="2"/>`;
+    const lineDots = rows.map((r, k) => {
+      const y = num(r[zi]);
+      return y == null ? '' : `<circle cx="${cx(k)}" cy="${lineScale(y)}" r="3" fill="${lineColor}"><title>${esc(cols[zi])}: ${formatNum(y)}</title></circle>`;
+    }).join('');
+
+    const yAxis = barTicks.map((lbl, k) => {
+      const v = barMin + (k / 4) * (barMax - barMin), y = barScale(v);
+      return `<line x1="${pad.l - 4}" y1="${y}" x2="${pad.l + iw}" y2="${y}" class="ch-grid"/><text x="${pad.l - 8}" y="${y + 4}" class="ch-lbl-y">${lbl}</text>`;
+    }).join('');
+    const y2Axis = lineTicks.map((lbl, k) => {
+      const v = lineMin + (k / 4) * (lineMax - lineMin), y = lineScale(v);
+      return `<text x="${pad.l + iw + 8}" y="${y + 4}" class="ch-lbl-x">${lbl}</text>`;
+    }).join('');
+    const axes = `<line x1="${pad.l}" y1="${pad.t}" x2="${pad.l}" y2="${pad.t + ih}" class="ch-axis"/><line x1="${pad.l + iw}" y1="${pad.t}" x2="${pad.l + iw}" y2="${pad.t + ih}" class="ch-axis"/><line x1="${pad.l}" y1="${pad.t + ih}" x2="${pad.l + iw}" y2="${pad.t + ih}" class="ch-axis"/>`;
+
+    const step = Math.ceil(n / 12);
+    const xLabels = rows.map((r, k) =>
+      k % step === 0
+        ? `<text x="${cx(k)}" y="${pad.t + ih + 20}" class="ch-lbl-x" transform="rotate(35 ${cx(k)} ${pad.t + ih + 20})">${esc(String(r[xi] ?? '')).slice(0, 14)}</text>`
+        : ''
+    ).join('');
+
+    const legend = `
+      <rect x="${pad.l + 8}" y="${pad.t - 6}" width="12" height="12" rx="2" fill="${barColor}" opacity="0.55"/>
+      <text x="${pad.l + 26}" y="${pad.t + 4}" class="ch-legend-text" font-size="10px">${esc(cols[yi]).slice(0, 16)}</text>
+      <line x1="${pad.l + 120}" y1="${pad.t}" x2="${pad.l + 140}" y2="${pad.t}" stroke="${lineColor}" stroke-width="2"/>
+      <circle cx="${pad.l + 130}" cy="${pad.t}" r="3" fill="${lineColor}"/>
+      <text x="${pad.l + 146}" y="${pad.t + 4}" class="ch-legend-text" font-size="10px">${esc(cols[zi]).slice(0, 16)}</text>
+    `;
+
+    return `
+      ${yAxis}
+      ${y2Axis}
+      ${axes}
+      <g class="ch-bars">${bars}</g>
+      ${linePath}
+      ${lineDots}
+      ${xLabels}
+      ${legend}
+      <text x="${pad.l + iw / 2}" y="${H - 4}" class="ch-title">${esc(cols[xi] ?? '')}</text>
+    `;
+  }
+};
+
 // Map Registry untuk renderers grafik
 const chartRenderers: Record<ChartType, ChartRenderer> = {
   bar: BarChartRenderer,
@@ -627,6 +789,8 @@ const chartRenderers: Record<ChartType, ChartRenderer> = {
   donut: DonutChartRenderer,
   area: AreaChartRenderer,
   heatmap: HeatmapChartRenderer,
+  stackedbar: StackedBarChartRenderer,
+  combo: ComboChartRenderer,
 };
 
 export const mountChartView = (host: HTMLElement): ChartViewApi => {
@@ -673,24 +837,28 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
         : option('(tak ada kolom numerik)', -1, -1);
     }
 
-    const zSelector = type === 'heatmap'
-      ? `<label>Nilai (Z)
+    const zSelector = (type === 'heatmap' || type === 'combo')
+      ? `<label>${type === 'combo' ? 'Garis (Y₂)' : 'Nilai (Z)'}
           <select id="ch-z">
-            <option value="-1"${zi === -1 ? ' selected' : ''}>-- Pilih Kolom Z --</option>
+            <option value="-1"${zi === -1 ? ' selected' : ''}>-- Pilih Kolom ${type === 'combo' ? 'Line' : 'Z'} --</option>
             ${numericYs.map((i) => option(cols[i], i, zi)).join('')}
           </select>
         </label>`
       : '';
 
-    const labelX = (type === 'pie' || type === 'donut') 
+    const labelX = (type === 'pie' || type === 'donut' || type === 'stackedbar') 
       ? 'Kategori (X)' 
       : (type === 'heatmap' ? 'Kolom X (Horizontal)' : 'Sumbu X');
     const labelY = (type === 'pie' || type === 'donut') 
       ? 'Nilai (Y)' 
-      : (type === 'heatmap' ? 'Kolom Y (Vertikal)' : 'Sumbu Y');
+      : (type === 'heatmap' ? 'Kolom Y (Vertikal)' : (type === 'combo' ? 'Batang (Y₁)' : 'Sumbu Y'));
 
     const hasData = type === 'heatmap'
       ? xi >= 0 && yi >= 0 && zi >= 0 && isNumericCol(rows, zi)
+      : type === 'stackedbar'
+      ? xi >= 0 && cols.some((_, i) => i !== xi && isNumericCol(rows, i))
+      : type === 'combo'
+      ? xi >= 0 && yi >= 0 && zi >= 0 && isNumericCol(rows, yi) && isNumericCol(rows, zi)
       : yi >= 0 && isNumericCol(rows, yi);
 
     return `
@@ -704,15 +872,19 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
               <option value="pie"${type === 'pie' ? ' selected' : ''}>Pie</option>
               <option value="donut"${type === 'donut' ? ' selected' : ''}>Donut</option>
               <option value="area"${type === 'area' ? ' selected' : ''}>Area</option>
+              <option value="stackedbar"${type === 'stackedbar' ? ' selected' : ''}>Stacked Bar</option>
+              <option value="combo"${type === 'combo' ? ' selected' : ''}>Combo (Bar+Line)</option>
               <option value="heatmap"${type === 'heatmap' ? ' selected' : ''}>Heatmap</option>
             </select>
           </label>
           <label>${labelX}
             <select id="ch-x">${xOptions}</select>
           </label>
-          <label>${labelY}
+          ${type === 'stackedbar'
+            ? `<label class="muted" style="align-self:center;font-size:11px">Semua kolom numerik (selain X) otomatis ditumpuk</label>`
+            : `<label>${labelY}
             <select id="ch-y">${yOptions}</select>
-          </label>
+          </label>`}
           ${zSelector}
         </div>
         ${hasData ? `
@@ -736,6 +908,14 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
     if (type === 'heatmap') {
       if (xi < 0 || yi < 0 || zi < 0 || !isNumericCol(rows, zi)) {
         return '<div class="muted" style="padding:12px">Pilih kolom X, Y, dan kolom Z numerik untuk membuat heatmap.</div>';
+      }
+    } else if (type === 'stackedbar') {
+      if (xi < 0 || !cols.some((_, i) => i !== xi && isNumericCol(rows, i))) {
+        return '<div class="muted" style="padding:12px">Pilih kolom X kategori dengan minimal satu kolom numerik lain untuk stacked bar.</div>';
+      }
+    } else if (type === 'combo') {
+      if (xi < 0 || yi < 0 || zi < 0 || !isNumericCol(rows, yi) || !isNumericCol(rows, zi)) {
+        return '<div class="muted" style="padding:12px">Pilih kolom X, Y₁ (batang), dan Y₂ (garis) numerik untuk combo chart.</div>';
       }
     } else {
       if (yi < 0 || !isNumericCol(rows, yi)) {
@@ -786,6 +966,9 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
       } else {
         if (yi < 0 || !isNumericCol(rows, yi)) {
           yi = numeric[0] ?? -1;
+        }
+        if (type === 'combo' && (zi < 0 || !isNumericCol(rows, zi) || zi === yi)) {
+          zi = numeric.find((i) => i !== yi) ?? yi;
         }
       }
       paint();
