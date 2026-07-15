@@ -17,6 +17,7 @@ export interface ChartRenderContext {
   xi: number;
   yi: number;
   zi?: number;
+  ci?: number;
   showAllXLabels: boolean;
   legendPosition: LegendPosition;
   legendOffsetX: number;
@@ -460,21 +461,86 @@ const ScatterChartRenderer: ChartRenderer = {
     return renderCartesian(ctx, ({ pad, iw, ih, yScale }) => {
       const xs = ctx.rows.map((r) => num(r[ctx.xi]));
       const xVals = xs.filter((v): v is number => v != null);
+      if (xVals.length === 0) {
+        return { body: '', xLabels: '' };
+      }
+
       let xMin = Math.min(...xVals), xMax = Math.max(...xVals);
       if (xMin === xMax) xMax = xMin + 1;
       const xScale = (v: number): number => pad.l + ((v - xMin) / (xMax - xMin)) * iw;
 
-      const body = ctx.rows.map((r) => {
-        const x = num(r[ctx.xi]), y = num(r[ctx.yi]);
-        return x == null || y == null ? '' : `<circle cx="${xScale(x)}" cy="${yScale(y)}" r="4" class="ch-pt"/>`;
+      const sizeIdx = ctx.zi ?? -1;
+      const hasSize = sizeIdx >= 0;
+      const sizeVals = hasSize
+        ? ctx.rows.map((r) => num(r[sizeIdx])).filter((v): v is number => v != null)
+        : [];
+      let sizeMin = 0;
+      let sizeMax = 1;
+      if (sizeVals.length > 0) {
+        sizeMin = Math.min(...sizeVals);
+        sizeMax = Math.max(...sizeVals);
+        if (sizeMin === sizeMax) sizeMax = sizeMin + 1;
+      }
+      const sizeScale = (v: number | null): number => {
+        if (!hasSize || v == null || sizeVals.length === 0) return 4;
+        return 3 + ((v - sizeMin) / (sizeMax - sizeMin)) * 8;
+      };
+
+      const colorIdx = ctx.ci ?? -1;
+      const hasColor = colorIdx >= 0;
+      const categories = hasColor
+        ? Array.from(new Set(ctx.rows.map((r) => String(r[colorIdx] ?? 'N/A')))).slice(0, 8)
+        : [];
+      const colorMap = new Map(categories.map((cat, i) => [cat, PALETTE[i % PALETTE.length]]));
+
+      const points = ctx.rows.map((r) => {
+        const x = num(r[ctx.xi]);
+        const y = num(r[ctx.yi]);
+        if (x == null || y == null) return '';
+
+        const sizeVal = hasSize ? num(r[sizeIdx]) : null;
+        const radius = sizeScale(sizeVal);
+        const cat = hasColor ? String(r[colorIdx] ?? 'N/A') : '';
+        const fill = hasColor ? (colorMap.get(cat) ?? 'var(--accent)') : 'var(--accent)';
+        const tip = [
+          `${ctx.esc(ctx.cols[ctx.xi] ?? 'X')}: ${ctx.formatNum(x)}`,
+          `${ctx.esc(ctx.cols[ctx.yi] ?? 'Y')}: ${ctx.formatNum(y)}`,
+          hasSize && sizeVal != null ? `${ctx.esc(ctx.cols[sizeIdx] ?? 'Size')}: ${ctx.formatNum(sizeVal)}` : '',
+          hasColor ? `${ctx.esc(ctx.cols[colorIdx] ?? 'Color')}: ${ctx.esc(cat)}` : '',
+        ].filter(Boolean).join(' | ');
+
+        return `<circle cx="${xScale(x)}" cy="${yScale(y)}" r="${radius}" fill="${fill}" fill-opacity="0.8"><title>${tip}</title></circle>`;
       }).join('');
+
+      const colorLegend = hasColor && categories.length > 0
+        ? `<g class="ch-legend" transform="translate(${resolveLegendAnchor(
+            ctx.width,
+            ctx.height,
+            ctx.legendPosition,
+            { x: pad.l + 8, y: pad.t - 6 },
+            ctx.legendOffsetX,
+            ctx.legendOffsetY,
+            categories.length,
+          ).x}, ${resolveLegendAnchor(
+            ctx.width,
+            ctx.height,
+            ctx.legendPosition,
+            { x: pad.l + 8, y: pad.t - 6 },
+            ctx.legendOffsetX,
+            ctx.legendOffsetY,
+            categories.length,
+          ).y})">${categories.map((cat, i) => `
+            <rect x="0" y="${i * 18}" width="12" height="12" rx="2" fill="${colorMap.get(cat)}"/>
+            <text x="18" y="${i * 18 + 10}" class="ch-legend-text">${ctx.esc(cat).slice(0, 18)}</text>
+          `).join('')}</g>`
+        : '';
 
       const xLabels = Array.from({ length: 5 }, (_, k) => {
         const v = xMin + (k / 4) * (xMax - xMin);
         return `<text x="${xScale(v)}" y="${pad.t + ih + 20}" class="ch-lbl-x-c">${ctx.formatNum(v)}</text>`;
       }).join('');
 
-      return { body, xLabels };
+      return { body: points + colorLegend, xLabels };
     });
   }
 };
@@ -898,6 +964,7 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
   let xi = 0;
   let yi = 1;
   let zi = 2;
+  let ci = -1;
   let showAllXLabels = false;
   let legendPosition: LegendPosition = 'outside-right';
   let legendOffsetX = 0;
@@ -911,6 +978,7 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
     xi = -1;
     yi = -1;
     zi = -1;
+    ci = -1;
     showAllXLabels = false;
     legendPosition = 'outside-right';
     legendOffsetX = 0;
@@ -922,6 +990,7 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
 
   const renderControls = (): string => {
     const numericYs = cols.map((_, i) => i).filter((i) => isNumericCol(rows, i));
+    const categoricalCols = cols.map((_, i) => i).filter((i) => !isNumericCol(rows, i));
 
     const xOptions = [
       `<option value="-1"${xi === -1 ? ' selected' : ''}>-- Pilih Kolom X --</option>`,
@@ -943,11 +1012,20 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
         : option('(tak ada kolom numerik)', -1, -1);
     }
 
-    const zSelector = (type === 'heatmap' || type === 'combo')
-      ? `<label>${type === 'combo' ? 'Garis (Y₂)' : 'Nilai (Z)'}
+    const zSelector = (type === 'heatmap' || type === 'combo' || type === 'scatter')
+      ? `<label>${type === 'combo' ? 'Garis (Y₂)' : type === 'scatter' ? 'Size (opsional)' : 'Nilai (Z)'}
           <select id="ch-z">
-            <option value="-1"${zi === -1 ? ' selected' : ''}>-- Pilih Kolom ${type === 'combo' ? 'Line' : 'Z'} --</option>
+            <option value="-1"${zi === -1 ? ' selected' : ''}>-- ${type === 'scatter' ? 'Ukuran default' : `Pilih Kolom ${type === 'combo' ? 'Line' : 'Z'}`} --</option>
             ${numericYs.map((i) => option(cols[i], i, zi)).join('')}
+          </select>
+        </label>`
+      : '';
+
+    const scatterColorSelector = type === 'scatter'
+      ? `<label>Color (kategori)
+          <select id="ch-color">
+            <option value="-1"${ci === -1 ? ' selected' : ''}>-- Warna default --</option>
+            ${(categoricalCols.length > 0 ? categoricalCols : cols.map((_, i) => i)).map((i) => option(cols[i], i, ci)).join('')}
           </select>
         </label>`
       : '';
@@ -959,7 +1037,7 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
       ? 'Nilai (Y)' 
       : (type === 'heatmap' ? 'Kolom Y (Vertikal)' : (type === 'combo' ? 'Batang (Y₁)' : 'Sumbu Y'));
     const supportsDenseXLabels = type !== 'pie' && type !== 'donut' && type !== 'scatter';
-    const supportsLegendOptions = type === 'pie' || type === 'donut' || type === 'stackedbar' || type === 'combo' || type === 'heatmap';
+    const supportsLegendOptions = type === 'pie' || type === 'donut' || type === 'stackedbar' || type === 'combo' || type === 'heatmap' || type === 'scatter';
 
     const hasData = type === 'heatmap'
       ? xi >= 0 && yi >= 0 && zi >= 0 && isNumericCol(rows, zi)
@@ -967,6 +1045,8 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
       ? xi >= 0 && cols.some((_, i) => i !== xi && isNumericCol(rows, i))
       : type === 'combo'
       ? xi >= 0 && yi >= 0 && zi >= 0 && isNumericCol(rows, yi) && isNumericCol(rows, zi)
+      : type === 'scatter'
+      ? xi >= 0 && yi >= 0 && isNumericCol(rows, xi) && isNumericCol(rows, yi) && (zi < 0 || isNumericCol(rows, zi))
       : yi >= 0 && isNumericCol(rows, yi);
 
     return `
@@ -994,6 +1074,7 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
             <select id="ch-y">${yOptions}</select>
           </label>`}
           ${zSelector}
+          ${scatterColorSelector}
           ${supportsDenseXLabels ? `<label class="muted" style="align-self:center;font-size:11px;display:flex;gap:6px;align-items:center">
             <input id="ch-all-x" type="checkbox" ${showAllXLabels ? 'checked' : ''} /> Semua label X (kecil)
           </label>` : ''}
@@ -1034,6 +1115,10 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
       if (xi < 0 || yi < 0 || zi < 0 || !isNumericCol(rows, zi)) {
         return '<div class="muted" style="padding:12px">Pilih kolom X, Y, dan kolom Z numerik untuk membuat heatmap.</div>';
       }
+    } else if (type === 'scatter') {
+      if (xi < 0 || yi < 0 || !isNumericCol(rows, xi) || !isNumericCol(rows, yi) || (zi >= 0 && !isNumericCol(rows, zi))) {
+        return '<div class="muted" style="padding:12px">Scatter perlu kolom X & Y numerik. Size opsional harus numerik.</div>';
+      }
     } else if (type === 'stackedbar') {
       if (xi < 0 || !cols.some((_, i) => i !== xi && isNumericCol(rows, i))) {
         return '<div class="muted" style="padding:12px">Pilih kolom X kategori dengan minimal satu kolom numerik lain untuk stacked bar.</div>';
@@ -1068,6 +1153,7 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
       legendOffsetY,
       formatNum,
       esc,
+      ci,
     };
 
     const innerSvg = renderer.render(ctx);
@@ -1099,6 +1185,17 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
         if (type === 'combo' && (zi < 0 || !isNumericCol(rows, zi) || zi === yi)) {
           zi = numeric.find((i) => i !== yi) ?? yi;
         }
+        if (type === 'scatter') {
+          if (xi < 0 || !isNumericCol(rows, xi)) {
+            xi = numeric.find((i) => i !== yi) ?? numeric[0] ?? -1;
+          }
+          if (zi >= 0 && !isNumericCol(rows, zi)) {
+            zi = -1;
+          }
+          if (ci >= 0 && ci === zi) {
+            ci = -1;
+          }
+        }
       }
       paint();
     });
@@ -1110,6 +1207,11 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
     const zSel = host.querySelector<HTMLSelectElement>('#ch-z');
     if (zSel) {
       zSel.addEventListener('change', (e) => { zi = Number((e.target as HTMLSelectElement).value); paint(); });
+    }
+
+    const cSel = host.querySelector<HTMLSelectElement>('#ch-color');
+    if (cSel) {
+      cSel.addEventListener('change', (e) => { ci = Number((e.target as HTMLSelectElement).value); paint(); });
     }
 
     const allXToggle = host.querySelector<HTMLInputElement>('#ch-all-x');
@@ -1150,6 +1252,7 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
         xi = -1;
         yi = -1;
         zi = -1;
+        ci = -1;
         showAllXLabels = false;
         legendPosition = 'outside-right';
         legendOffsetX = 0;
@@ -1195,6 +1298,8 @@ export const mountChartView = (host: HTMLElement): ChartViewApi => {
     } else {
       zi = -1;
     }
+    const categorical = cols.map((_, i) => i).filter((i) => !isNumericCol(rows, i));
+    ci = categorical[0] ?? -1;
     paint();
   };
 
